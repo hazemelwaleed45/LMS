@@ -20,6 +20,7 @@ use App\Http\Controllers\Admin\MeetingController;
 
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\CartController;
+use App\Http\Controllers\StudentInterestController;
 
 
 /*
@@ -93,6 +94,15 @@ Route::middleware(['auth:sanctum','ensure.single.device', 'role:student'])->grou
         
         Route::get('/mycourses', [MyCoursesController::class, 'myCourses']);
         Route::get('/mycourses/{course}', [MyCoursesController::class, 'view']);
+
+        // interested routes
+
+        Route::get('/interests/get', [StudentInterestController::class, 'index']);
+        Route::post('/interests/add', [StudentInterestController::class, 'store']);
+        Route::put('/interests/update/{id}', [StudentInterestController::class, 'update']);
+        Route::delete('/interests/delete/{id}', [StudentInterestController::class, 'destroy']);
+        Route::get('/interests/list', [StudentInterestController::class, 'showUserInterests']);
+
 
     });
 });
