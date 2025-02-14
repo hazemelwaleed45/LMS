@@ -84,8 +84,8 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 
 Route::middleware(['auth:sanctum','ensure.single.device', 'role:student'])->group(function () {
     Route::prefix('student')->group(function () {
-
-        Route::patch('/{id}', [StudentController::class, 'update']);
+        //update student profile
+        Route::post('edit/{id}', [StudentController::class, 'update']);
         //cart
         Route::get('/cart', [CartController::class, 'index']);
         Route::post('/cart/add', [CartController::class, 'addToCart']);

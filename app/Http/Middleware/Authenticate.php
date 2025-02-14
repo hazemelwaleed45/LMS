@@ -14,7 +14,7 @@ class Authenticate extends Middleware
             $this->authenticate($request, $guards);
         } catch (\Illuminate\Auth\AuthenticationException $e) {
             // return token send
-            return response()->json(['message' => 'Token is invalid','token' => $request->header('Authorization')], 401);
+            return response()->json(['message' => 'Token is invalid'], 401);
         }
 
         return $next($request);
