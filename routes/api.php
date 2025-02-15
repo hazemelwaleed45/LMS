@@ -39,6 +39,9 @@ Route::post('/login', [AuthController::class, 'login'])->name('login');
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+//get all courses
+Route::get('/courses', [MyCoursesController::class, 'getCourses']);
+Route::get('/courses/{id}', [MyCoursesController::class, 'getCourse']);
 Route::middleware([StartSession::class])->group(function () {
     // Social Login Routes
     Route::get('/auth/{provider}', [SocialController::class, 'redirectToProvider']);
