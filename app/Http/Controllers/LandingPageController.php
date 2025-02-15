@@ -11,9 +11,9 @@ class LandingPageController extends Controller
 {
     public function getInstructors()
     {
-        // Cache the data for 60 minutes 
+        // Cache the data for 60 minutes
         $data = Cache::remember('instructors_list', 60, function () {
-            $instructors = Instructor::with(['courses:id,title,instructor_id'])->get(['id', 'name', 'image']);
+            $instructors = Instructor::with(['courses:id,title,instructor_id'])->get(['id', 'name', 'image','about']);
 
             return $instructors->map(function ($instructor) {
                 return [
@@ -22,6 +22,8 @@ class LandingPageController extends Controller
                     'image' => $instructor->image
                         ? Storage::disk('public')->url('images/instructors/' . $instructor->image)
                         : null,
+                    'about' => $instructor->about,
+                    'rate' => $instructor->averageRating(),
                 ];
             });
         });
