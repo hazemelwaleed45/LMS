@@ -106,18 +106,42 @@ class MyCoursesController extends Controller
     public function getCourse($id)
     {
         // cache the course
-        $cacheKey = "course_". $id;
+        $cacheKey = "course_" . $id;
         $cachedData = cache()->get($cacheKey);
 
         if ($cachedData) {
             return response()->json($cachedData, 200);
         }
         // fetch the course from the database and cache the course
-        $course = Course::with(['category:id,name', 'instructor:id,name,about,image', 'lectures:id,course_id,title'])->find($id);
+        $course = Course::with([
+            'category:id,name',
+            'instructor:id,name,about,image',
+            'lectures:id,course_id,title',
+            'reviews.student:id,first_name,last_name,image'
+        ])->find($id);
 
         if (!$course) {
             return response()->json(['error' => 'Course not found'], 404);
         }
+
+        // Calculate course rating metrics
+        $courseRating = $course->getRatingMetrics();
+        // Format student feedbacks
+        $studentsFeedbacks = $course->reviews->map(function ($review) {
+            return [
+                'student' => [
+                    'id' => $review->student->id,
+                    'name' => $review->student->first_name . ' ' . $review->student->last_name,
+                    'image' => $review->student->image
+                        ? Storage::disk('public')->url('images/students/' . $review->student->image)
+                        : null,
+                ],
+                'rate' => $review->rating,
+                'comment' => $review->comment,
+                'created_at' => $review->created_at->toIso8601String(), // Format as ISO 8601
+            ];
+        });
+
 
         $data =  [
             'id' => $course->id,
@@ -126,6 +150,11 @@ class MyCoursesController extends Controller
                 ? Storage::disk('public')->url('images/courses/' . $course->image)
                 : null,
             'description' => $course->description ?? null,
+            'course_duration' => $course->duration . ' days',
+            'course_price' => $course->price,
+            'course_level' => $course->course_level,
+            //calc students enrroll
+            'students_enrolled' => $course->enrollments->count(),
             'instructor' => $course->instructor ? [
                 'id' => $course->instructor->id,
                 'name' => $course->instructor->name,
@@ -144,9 +173,42 @@ class MyCoursesController extends Controller
                     'id' => $lecture->id,
                     'title' => $lecture->title
                 ];
-            })
+            }),
+            'course_rating' => $courseRating,
+            'students_feedbacks' => $studentsFeedbacks,
         ];
         cache()->put($cacheKey, $data, now()->addMinutes(60));
         return response()->json(['data' => $data], 200);
+    }
+
+    public function getRelatedCourses($id)
+    {
+        $course = Course::find($id);
+
+        if (!$course) {
+            return response()->json(['error' => 'Course not found'], 404);
+        }
+
+        // Get related courses (courses in the same category, excluding the current course)
+        $relatedCourses = Course::where('category_id', $course->category_id)
+            ->where('id', '!=', $course->id) // Exclude the current course
+            ->limit(5) // Limit the number of related courses
+            ->get(['id', 'title', 'category_id', 'price', 'rate']);
+
+        // Format the related courses
+        $formattedRelatedCourses = $relatedCourses->map(function ($relatedCourse) {
+            return [
+                'id' => $relatedCourse->id,
+                'title' => $relatedCourse->title,
+                'category' => $relatedCourse->category->name, // Assuming category relationship exists
+                'price' => number_format($relatedCourse->price, 2),
+                'rating' => round($relatedCourse->rate, 1), // Round to 1 decimal place
+                'students_enrolled' => $relatedCourse->enrollments->count(),
+            ];
+        });
+
+        return response()->json([
+            'related_courses' => $formattedRelatedCourses,
+        ], 200);
     }
 }

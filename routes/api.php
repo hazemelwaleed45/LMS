@@ -39,9 +39,16 @@ Route::post('/login', [AuthController::class, 'login'])->name('login');
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
-//get all courses
+
+// endpoints for landing page
 Route::get('/courses', [MyCoursesController::class, 'getCourses']);
 Route::get('/courses/{id}', [MyCoursesController::class, 'getCourse']);
+Route::get('/courses/{id}/related', [MyCoursesController::class, 'getRelatedCourses']);
+
+Route::get('instructors', [LandingPageController::class, 'getInstructors']);
+Route::get('instructors/{id}', [LandingPageController::class, 'getInstructor']);
+
+
 Route::middleware([StartSession::class])->group(function () {
     // Social Login Routes
     Route::get('/auth/{provider}', [SocialController::class, 'redirectToProvider']);
@@ -111,14 +118,6 @@ Route::middleware(['auth:sanctum','ensure.single.device', 'role:student'])->grou
 
     });
 });
-
-Route::prefix('landingPage')->group(function () {
-    Route::get('instructors', [LandingPageController::class, 'getInstructors']);
-    Route::get('instructors/{id}', [LandingPageController::class, 'getInstructor']);
-});
-
-
-
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/paypal-payment', [PaymentController::class, 'paypalPayment']);
