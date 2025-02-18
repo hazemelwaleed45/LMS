@@ -35,6 +35,7 @@ use App\Http\Controllers\CartController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::middleware('auth:sanctum')->get('/profile', [AuthController::class, 'getUser']);
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
@@ -90,7 +91,7 @@ Route::middleware(['auth:sanctum','ensure.single.device', 'role:student'])->grou
         Route::post('/cart/checkout', [CartController::class, 'checkout']);
 
         Route::get('payment-history', [PaymentController::class, 'getPaymentHistory']); // student
-        
+
         Route::get('/mycourses', [MyCoursesController::class, 'myCourses']);
         Route::get('/mycourses/{course}', [MyCoursesController::class, 'view']);
 
@@ -111,4 +112,3 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::get('/paypal-success', [PaymentController::class, 'paypalSuccess'])->name('paypal.success');
 Route::get('/paypal-cancel', [PaymentController::class, 'paypalCancel'])->name('paypal.cancel');
 Route::post('payments/process', [PaymentController::class, 'processPayment']);
-
