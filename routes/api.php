@@ -15,7 +15,7 @@ use App\Http\Controllers\Admin\CourseLecturesController;
 use App\Http\Controllers\Admin\StudentController;
 use Illuminate\Session\Middleware\StartSession;
 
-use App\Http\Controllers\Student\MyCoursesController;
+use App\Http\Controllers\Student\CourseController as StudentCourseController;
 use App\Http\Controllers\Admin\MeetingController;
 
 use App\Http\Controllers\PageController;
@@ -41,9 +41,9 @@ Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
 // endpoints for landing page
-Route::get('/courses', [MyCoursesController::class, 'getCourses']);
-Route::get('/courses/{id}', [MyCoursesController::class, 'getCourse']);
-Route::get('/courses/{id}/related', [MyCoursesController::class, 'getRelatedCourses']);
+Route::get('/courses', [StudentCourseController::class, 'getCourses']);
+Route::get('/courses/{id}', [StudentCourseController::class, 'getCourse']);
+Route::get('/courses/{id}/related', [StudentCourseController::class, 'getRelatedCourses']);
 
 Route::get('instructors', [LandingPageController::class, 'getInstructors']);
 Route::get('instructors/{id}', [LandingPageController::class, 'getInstructor']);
@@ -92,7 +92,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 });
 
 
-Route::middleware(['auth:sanctum','ensure.single.device', 'role:student'])->group(function () {
+Route::middleware(['auth:sanctum', 'ensure.single.device', 'role:student'])->group(function () {
     Route::prefix('student')->group(function () {
         //update student profile
         Route::post('edit/{id}', [StudentController::class, 'update']);
@@ -104,8 +104,11 @@ Route::middleware(['auth:sanctum','ensure.single.device', 'role:student'])->grou
 
         Route::get('payment-history', [PaymentController::class, 'getPaymentHistory']); // student
 
-        Route::get('/mycourses', [MyCoursesController::class, 'myCourses']);
-        Route::get('/mycourses/{course}', [MyCoursesController::class, 'view']);
+        Route::get('/mycourses', [StudentCourseController::class, 'myCourses']);
+        Route::get('/mycourses/{course}', [StudentCourseController::class, 'view']);
+        Route::get('/courses/{courseId}/feedback', [StudentCourseController::class, 'getCourseFeedback']);
+        Route::post('/courses/{courseId}/feedback', [StudentCourseController::class, 'submitCourseFeedback']);
+
 
         // interested routes
 
@@ -114,8 +117,6 @@ Route::middleware(['auth:sanctum','ensure.single.device', 'role:student'])->grou
         Route::put('/interests/update/{id}', [StudentInterestController::class, 'update']);
         Route::delete('/interests/delete/{id}', [StudentInterestController::class, 'destroy']);
         Route::get('/interests/list', [StudentInterestController::class, 'showUserInterests']);
-
-
     });
 });
 
@@ -125,4 +126,3 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::get('/paypal-success', [PaymentController::class, 'paypalSuccess'])->name('paypal.success');
 Route::get('/paypal-cancel', [PaymentController::class, 'paypalCancel'])->name('paypal.cancel');
 Route::post('payments/process', [PaymentController::class, 'processPayment']);
-

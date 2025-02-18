@@ -14,7 +14,7 @@ use App\Models\Category;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
 
-class MyCoursesController extends Controller
+class CourseController extends Controller
 {
     //
     public function myCourses(Request $request)
@@ -107,11 +107,11 @@ class MyCoursesController extends Controller
     {
         // cache the course
         $cacheKey = "course_" . $id;
-        $cachedData = cache()->get($cacheKey);
+        // $cachedData = cache()->get($cacheKey);
 
-        if ($cachedData) {
-            return response()->json($cachedData, 200);
-        }
+        // if ($cachedData) {
+        //     return response()->json($cachedData, 200);
+        // }
         // fetch the course from the database and cache the course
         $course = Course::with([
             'category:id,name',
@@ -177,7 +177,7 @@ class MyCoursesController extends Controller
             'course_rating' => $courseRating,
             'students_feedbacks' => $studentsFeedbacks,
         ];
-        cache()->put($cacheKey, $data, now()->addMinutes(60));
+       // cache()->put($cacheKey, $data, now()->addMinutes(60));
         return response()->json(['data' => $data], 200);
     }
 
@@ -210,5 +210,56 @@ class MyCoursesController extends Controller
         return response()->json([
             'related_courses' => $formattedRelatedCourses,
         ], 200);
+    }
+    public function getCourseFeedback($courseId)
+    {
+        $course = Course::with('reviews.student:id,first_name,last_name,image')->find($courseId);
+
+        if (!$course) {
+            return response()->json(['error' => 'Course not found'], 404);
+        }
+
+        $reviews = $course->reviews->map(function ($review) {
+            return [
+                'student_name' => $review->student->first_name . ' ' . $review->student->last_name,
+                'image' => $review->student->image
+                    ? Storage::disk('public')->url('images/students/' . $review->student->image)
+                    : null,
+                'rating' => $review->rating,
+                'comment' => $review->comment,
+                'created_at' => $review->created_at->toDateTimeString(),
+            ];
+        });
+
+        return response()->json(['data' => $reviews], 200);
+    }
+
+    public function submitCourseFeedback(Request $request, $courseId)
+    {
+        $validatedData = $request->validate([
+            'student_id' => 'required|exists:students,id',
+            'rating' => 'required|integer|min:1|max:5',
+            'comment' => 'required|string|max:1000',
+        ]);
+
+        $course = Course::find($courseId);
+
+        if (!$course) {
+            return response()->json(['error' => 'Course not found'], 404);
+        }
+
+        // Create and save the review
+        $review = new Review();
+        $review->course_id = $courseId;
+        $review->student_id = $validatedData['student_id'];
+        $review->rating = $validatedData['rating'];
+        $review->comment = $validatedData['comment'];
+        $review->review_date = now();
+        $review->save();
+        $averageRating = Review::where('course_id', $courseId)->avg('rating');
+        $course->rate = round($averageRating, 1);
+        $course->save();
+
+        return response()->json(['message' => 'Course review submitted successfully'], 201);
     }
 }
