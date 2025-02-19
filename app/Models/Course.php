@@ -61,7 +61,7 @@ class Course extends Model
     {
         return $this->hasMany(Enrollment::class, 'course_id');
     }
-    public function remove():bool
+    public function remove(): bool
     {
         return $this->delete();
         $this->lectures()->delete();
@@ -69,5 +69,33 @@ class Course extends Model
     public function carts()
     {
         return $this->hasMany(Cart::class);
+    }
+
+    public function getRatingMetrics()
+    {
+        // Get all reviews for this course
+        $reviews = $this->reviews;
+
+        // Calculate total reviews
+        $totalReviews = $reviews->count();
+
+        // Calculate average rating
+        $averageRating = $reviews->avg('rating');
+
+        // Calculate rating percentages
+        $ratingCounts = $reviews->groupBy('rating')->map->count();
+        $ratingPercentages = [];
+
+        for ($i = 1; $i <= 5; $i++) {
+            $count = $ratingCounts->get($i, 0);
+            $percentage = $totalReviews > 0 ? round(($count / $totalReviews) * 100, 2) : 0;
+            $ratingPercentages[$i] = $percentage . '%';
+        }
+
+        return [
+            'average_rating' => round($averageRating, 1), // Round to 1 decimal place
+            'total_reviews' => $totalReviews,
+            'ratingPercentages' => $ratingPercentages,
+        ];
     }
 }
