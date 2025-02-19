@@ -256,4 +256,39 @@ class AuthController extends Controller
 
         return response()->json(['message' => 'Password reset successful'], 200);
     }
+
+    public function getProfile(Request $request)
+{
+    $lang = $request->header('Accept-Language', 'ar');
+
+    $authUser = Auth::user();
+    if (!$authUser) {
+        return response()->json(['error' => trans('messages.user_not_found', [], $lang)], 404);
+    }
+
+    if (!$authUser->hasRole('student')) {
+        return response()->json(['error' => trans('messages.unauthorized_access', [], $lang)], 403);
+    }
+
+    $student = $authUser->student;
+    if (!$student) {
+        return response()->json(['error' => trans('messages.student_data_not_found', [], $lang)], 404);
+    }
+
+    $responseData = [
+        'id' => $student->id,
+        'first_name' => $student->first_name,
+        'last_name' => $student->last_name,
+        'username' => $student->username,
+        'date_of_birth' => $student->date_of_birth,
+        'gender' => $student->gender,
+        'phone' => $student->phone,
+        'education' => $student->education,
+        'image' => $student->image,
+        'interests' => $student->interests,
+    ];
+
+    return response()->json(['data' => $responseData], 200);
+}
+    
 }

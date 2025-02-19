@@ -26,15 +26,11 @@ class MyCoursesResource extends JsonResource
             'image' => $this->image,
             'admin_amount' => $this->admin_amount,
             'instructor_amount' => $this->instructor_amount,
-            'category_id' => $this->category_id,
-            'instructor_id' => $this->instructor_id,
             'major' => $this->major,
             'prerequister' => $this->prerequister,
             'semster' => $this->semster,
             'course_level' => $this->course_level,
             'introduction_vedio_path' => $this->introduction_vedio_path,
-            'created_at' => $this->created_at->toDateTimeString(),
-            'updated_at' => $this->updated_at->toDateTimeString(),
 
             //instructor
             'instructor' => $this->instructor ? [
@@ -97,7 +93,7 @@ class MyCoursesResource extends JsonResource
                     'student' => $review->student ? [
                         'id' => $review->student->id,
                         'name' => $review->student->first_name . ' ' . $review->student->last_name,
-                        // 'email' => $review->student->user->email,
+                        
                         'image' => $review->student->image,
                     ] : null,
                 ];
