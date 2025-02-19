@@ -83,6 +83,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 
 Route::middleware(['auth:sanctum','ensure.single.device', 'role:student'])->group(function () {
     Route::prefix('student')->group(function () {
+        Route::get('/profile', [AuthController::class, 'getProfile']);
         //cart
         Route::get('/cart', [CartController::class, 'index']);
         Route::post('/cart/add', [CartController::class, 'addToCart']);
@@ -90,9 +91,14 @@ Route::middleware(['auth:sanctum','ensure.single.device', 'role:student'])->grou
         Route::post('/cart/checkout', [CartController::class, 'checkout']);
 
         Route::get('payment-history', [PaymentController::class, 'getPaymentHistory']); // student
-        
         Route::get('/mycourses', [MyCoursesController::class, 'myCourses']);
         Route::get('/mycourses/{course}', [MyCoursesController::class, 'view']);
+        Route::prefix('/student/mycourses/{course}/lectures')->group(function () {
+            Route::get('/{lecture}', [MyCoursesController::class, 'getLectureDetails']);
+        });
+        Route::post('/student/mycourses/{course}/review', [MyCoursesController::class, 'addReview']);
+        Route::put('/student/mycourses/{course}/review', [MyCoursesController::class, 'updateReview']);
+        Route::delete('/student/mycourses/{course}/review', [MyCoursesController::class, 'deleteReview']);
 
     });
 });
