@@ -19,22 +19,22 @@ class AuthController extends Controller
         $rules = [
             'email' => 'required|email|unique:users',
             'password' => 'required|confirmed|min:8',
-            'role' => 'required|in:instructor,student',
+            'role' => 'required|in:instructor,student', 
         ];
-
+    
         $validator = Validator::make($request->all(), $rules);
-
+    
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-
+    
 
         $user = User::create([
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role' => $request->role,
         ]);
-
+    
 
         if ($request->role === 'student') {
             $request->validate([
@@ -73,7 +73,7 @@ class AuthController extends Controller
                 'major' => 'required|in:university,school,graduated',
                 'image' => 'nullable|string|max:255',
             ]);
-
+    
             $user->instructor()->create([
                 'name' => $request->name,
                 'about' => $request->about,
@@ -89,19 +89,18 @@ class AuthController extends Controller
                 'name' => 'required|string|max:255',
                 'paypal_account' => 'nullable|string|max:255',
             ]);
-
+    
             $user->admin()->create([
                 'name' => $request->name,
                 'paypal_account' => $request->paypal_account,
             ]);
         }
-
+    
         return response()->json([
             'message' => 'Registration successful',
             'user' => $user,
         ], 201);
     }
-
 
     public function login(Request $request)
     {
@@ -109,42 +108,171 @@ class AuthController extends Controller
             'email' => 'required|email',
             'password' => 'required',
         ];
-
+    
         $validator = Validator::make($request->all(), $rules);
-
+    
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-
+    
+        // Retrieve the user FIRST before checking authentication
+        $user = User::where('email', $request->email)->first();
+    
+        // If user doesn't exist, return invalid credentials
+        if (!$user) {
+            return response()->json(['message' => 'Invalid credentials'], 401);
+        }
+    
+        // If the specific user is blocked, prevent login
+        if ($user->active == 2) {
+            return response()->json(['message' => 'Your account is blocked. Contact admin.'], 403);
+        }
+    
+        // Now, attempt authentication AFTER ensuring the user isn't blocked
         if (!Auth::attempt($request->only('email', 'password'))) {
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
-
+        
+        
+        // Refresh user data after login
         $user = Auth::user();
-        $deviceToken = Str::random(32);
-        if ($user->device_token) {
+    
+        // Allow admins to log in from multiple devices
+        // if ($user->role === 'admin') {
+        //     $token = $user->createToken('auth_token')->plainTextToken;
+    
+        //     return response()->json([
+        //         'token' => $token,
+        //         'user' => [
+        //             'id' => $user->id,
+        //             'email' => $user->email,
+        //             'role' => $user->role,
+        //         ],
+        //         'message' => 'Admin login successful.'
+        //     ], 200);
+        // }
+    
+        // If a student is already logged in from another device
+        if ($user->active == 1) {
+            // Force logout all active sessions
             $user->tokens()->delete();
+            
+            // Block the user from logging in
+            $user->update([
+                'device_token' => null,
+                'active' => 2
+            ]);
+    
+            return response()->json(['message' => 'You have been blocked for attempting to log in from another device. Contact admin.'], 403);
         }
-        $user->update(['device_token' => $deviceToken]);
-
+    
+        // Generate a new device token
+        $deviceToken = Str::random(32);
+    
+        // Update user status and device token
+        $user->update([
+            'device_token' => $deviceToken,
+            'active' => 1, // Mark as active
+        ]);
+    
+        // Generate new authentication token
         $token = $user->createToken('auth_token')->plainTextToken;
+    
+        return response()->json([
+            'token' => $token,
+            'user' => [
+                'id' => $user->id,
+                'email' => $user->email,
+                'role' => $user->role,
+            ],
+            'message' => 'Login successful.'
+        ], 200);
+    }
+    
+    public function logout(Request $request)
+    {
+        $user = $request->user();
+        
+        // Revoke all user tokens
+        $user->tokens()->delete();
+        
+        // Clear the device token and set active status to 0
+        $user->update([
+            'device_token' => null,
+            'active' => 0, // Mark as logged out
+        ]);
 
-
-        $request->headers->set('Authorization', 'Bearer ' . $token);
-
-        // Get user details using the existing getUser function
-        $userResponse = $this->getUser($request);
-
-        // // Extract response data
-        $userData = json_decode($userResponse->getContent(), true);
-
-        // Add the token to the response
-        $userData['token'] = $token;
-        $userData['device_token'] = $deviceToken;
-
-        return response()->json($userData, 200);
+        return response()->json(['message' => 'Logout successful']);
+    }
+    public function forgotPassword(Request $request)
+    {
+        $rules = [
+            'email' => 'required|email',
+        ];
+    
+        $validator = Validator::make($request->all(), $rules);
+    
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+    
+        $user = User::where('email', $request->email)->first();
+    
+        if (!$user) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
+    
+        $otp = rand(1000, 9999);
+        $otpExpiresAt = Carbon::now()->addMinutes(10);
+    
+        $user->update([
+            'remember_token' => $otp,
+            'otp_expires_at' => $otpExpiresAt,
+        ]);
+    
+        Mail::to($user->email)->send(new OtpMail($otp, 'forget_password'));
+    
+        return response()->json(['message' => 'OTP sent to your email'], 200);
     }
 
+    public function resetPassword(Request $request) 
+    {
+        $rules = [
+            'email' => 'required|email',
+            'otp' => 'required|numeric',
+            'password' => 'required|confirmed|min:8',
+        ];
+    
+        $validator = Validator::make($request->all(), $rules);
+    
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+    
+        $user = User::where('email', $request->email)->first();
+    
+        if (!$user) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
+    
+        if ($user->remember_token !== $request->otp) {
+            return response()->json(['message' => 'Invalid OTP'], 400);
+        }
+    
+        if (Carbon::now()->gt($user->otp_expires_at)) {
+            return response()->json(['message' => 'OTP has expired'], 400);
+        }
+    
+        $user->password = Hash::make($request->password);
+        $user->save();
+    
+        $user->update([
+            'remember_token' => null,
+            'otp_expires_at' => null,
+        ]);
+    
+        return response()->json(['message' => 'Password reset successful'], 200);
+    }
     public function getUser(Request $request)
     {
         $user = $request->user();
@@ -172,123 +300,38 @@ class AuthController extends Controller
             ]
         ], 200);
     }
-
-    public function logout(Request $request)
-    {
-        $user = $request->user();
-
-        // Revoke all user tokens
-        $user->tokens()->delete();
-
-        // Clear the device token
-        $user->update(['device_token' => null]);
-
-        return response()->json(['message' => 'Logout successful']);
-    }
-
-
-    public function forgotPassword(Request $request)
-    {
-        $rules = [
-            'email' => 'required|email',
-        ];
-
-        $validator = Validator::make($request->all(), $rules);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        $user = User::where('email', $request->email)->first();
-
-        if (!$user) {
-            return response()->json(['message' => 'User not found'], 404);
-        }
-
-        $otp = rand(1000, 9999);
-        $otpExpiresAt = Carbon::now()->addMinutes(10);
-
-        $user->update([
-            'remember_token' => $otp,
-            'otp_expires_at' => $otpExpiresAt,
-        ]);
-
-        Mail::to($user->email)->send(new OtpMail($otp, 'forget_password'));
-
-        return response()->json(['message' => 'OTP sent to your email'], 200);
-    }
-
-    public function resetPassword(Request $request)
-    {
-        $rules = [
-            'email' => 'required|email',
-            'otp' => 'required|numeric',
-            'password' => 'required|confirmed|min:8',
-        ];
-
-        $validator = Validator::make($request->all(), $rules);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        $user = User::where('email', $request->email)->first();
-
-        if (!$user) {
-            return response()->json(['message' => 'User not found'], 404);
-        }
-
-        if ($user->remember_token !== $request->otp) {
-            return response()->json(['message' => 'Invalid OTP'], 400);
-        }
-
-        if (Carbon::now()->gt($user->otp_expires_at)) {
-            return response()->json(['message' => 'OTP has expired'], 400);
-        }
-
-        $user->password = Hash::make($request->password);
-        $user->save();
-
-        $user->update([
-            'remember_token' => null,
-            'otp_expires_at' => null,
-        ]);
-
-        return response()->json(['message' => 'Password reset successful'], 200);
-    }
-
     public function getProfile(Request $request)
-{
-    $lang = $request->header('Accept-Language', 'ar');
+    {
+        $lang = $request->header('Accept-Language', 'ar');
 
-    $authUser = Auth::user();
-    if (!$authUser) {
-        return response()->json(['error' => trans('messages.user_not_found', [], $lang)], 404);
+        $authUser = Auth::user();
+        if (!$authUser) {
+            return response()->json(['error' => trans('messages.user_not_found', [], $lang)], 404);
+        }
+
+        if (!$authUser->hasRole('student')) {
+            return response()->json(['error' => trans('messages.unauthorized_access', [], $lang)], 403);
+        }
+
+        $student = $authUser->student;
+        if (!$student) {
+            return response()->json(['error' => trans('messages.student_data_not_found', [], $lang)], 404);
+        }
+
+        $responseData = [
+            'id' => $student->id,
+            'first_name' => $student->first_name,
+            'last_name' => $student->last_name,
+            'username' => $student->username,
+            'date_of_birth' => $student->date_of_birth,
+            'gender' => $student->gender,
+            'phone' => $student->phone,
+            'education' => $student->education,
+            'image' => $student->image,
+            'interests' => $student->interests,
+        ];
+
+        return response()->json(['data' => $responseData], 200);
     }
-
-    if (!$authUser->hasRole('student')) {
-        return response()->json(['error' => trans('messages.unauthorized_access', [], $lang)], 403);
-    }
-
-    $student = $authUser->student;
-    if (!$student) {
-        return response()->json(['error' => trans('messages.student_data_not_found', [], $lang)], 404);
-    }
-
-    $responseData = [
-        'id' => $student->id,
-        'first_name' => $student->first_name,
-        'last_name' => $student->last_name,
-        'username' => $student->username,
-        'date_of_birth' => $student->date_of_birth,
-        'gender' => $student->gender,
-        'phone' => $student->phone,
-        'education' => $student->education,
-        'image' => $student->image,
-        'interests' => $student->interests,
-    ];
-
-    return response()->json(['data' => $responseData], 200);
-}
     
 }

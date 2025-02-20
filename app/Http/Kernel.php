@@ -68,6 +68,7 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'role' => \App\Http\Middleware\RoleMiddleware::class,
         'ensure.single.device' => \App\Http\Middleware\EnsureSingleDevice::class,
+        'check.active' => \App\Http\Middleware\CheckUserActive::class,
 
     ];
     protected $routeMiddleware = [

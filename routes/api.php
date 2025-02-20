@@ -14,14 +14,13 @@ use App\Http\Controllers\StudentAdminController;
 use App\Http\Controllers\Admin\CourseLecturesController;
 use App\Http\Controllers\Admin\StudentController;
 use Illuminate\Session\Middleware\StartSession;
-
 use App\Http\Controllers\Student\CourseController as StudentCourseController;
 use App\Http\Controllers\Admin\MeetingController;
-
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\StudentInterestController;
-
+use App\Http\Controllers\Student\MyCoursesController;
+use Illuminate\Session\Middleware\CheckUserActive;
 
 /*
 |--------------------------------------------------------------------------
@@ -103,7 +102,7 @@ Route::middleware(['auth:sanctum', 'ensure.single.device', 'role:student'])->gro
         Route::delete('/cart/remove/{id}', [CartController::class, 'removeFromCart']);
         Route::post('/cart/checkout', [CartController::class, 'checkout']);
 
-        Route::get('payment-history', [PaymentController::class, 'getPaymentHistory']); // student
+        // Route::get('payment-history', [PaymentController::class, 'getPaymentHistory']); // student
         Route::get('/mycourses', [MyCoursesController::class, 'myCourses']);
         Route::get('/mycourses/{course}', [MyCoursesController::class, 'view']);
         Route::prefix('/student/mycourses/{course}/lectures')->group(function () {
@@ -134,4 +133,24 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 Route::get('/paypal-success', [PaymentController::class, 'paypalSuccess'])->name('paypal.success');
 Route::get('/paypal-cancel', [PaymentController::class, 'paypalCancel'])->name('paypal.cancel');
+
+Route::get('payments/export', [PaymentController::class, 'exportPaymentsReport']);
+Route::get('purchase', [PaymentController::class, 'getPaymentsReport']);
 Route::post('payments/process', [PaymentController::class, 'processPayment']);
+
+Route::post('payments/prepare', [PaymentController::class, 'createPaymentMethod']);
+
+Route::middleware(['auth:sanctum', 'ensure.single.device' , 'role:student', 'check.active'])->group(function () {
+    Route::get('payment-history', [PaymentController::class, 'getPaymentHistory']); // student
+    Route::get('/student/mycourses', [MyCoursesController::class, 'myCourses']);
+    Route::get('/student/mycourses/{course}', [MyCoursesController::class, 'view']);
+});
+
+
+Route::post('/login', [AuthController::class, 'login']);
+Route::post('/logout', [AuthController::class, 'logout']);
+
+Route::middleware(['auth:sanctum', 'check.active'])->group(function () {
+    Route::get('/admin/blocked-users', [AdminController::class, 'getBlockedUsers']);
+    Route::post('/admin/unblock-user/{id}', [AdminController::class, 'unblockUser']);
+});
