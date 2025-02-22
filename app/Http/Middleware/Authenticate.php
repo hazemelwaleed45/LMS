@@ -7,11 +7,28 @@ use Illuminate\Http\Request;
 
 class Authenticate extends Middleware
 {
-    /**
-     * Get the path the user should be redirected to when they are not authenticated.
-     */
-    protected function redirectTo(Request $request): ?string
+
+    public function handle($request, \Closure $next, ...$guards)
     {
-        return $request->expectsJson() ? null : route('login');
+        try {
+            $this->authenticate($request, $guards);
+        } catch (\Illuminate\Auth\AuthenticationException $e) {
+            // return token send
+            return response()->json(['message' => 'Token is invalid'], 401);
+        }
+
+        return $next($request);
+    }
+
+    /**
+     * Handle unauthenticated requests.
+     */
+    protected function unauthenticated($request, array $guards)
+    {
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Token is invalid'], 401);
+        }
+
+        parent::unauthenticated($request, $guards);
     }
 }

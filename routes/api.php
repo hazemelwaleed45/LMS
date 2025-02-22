@@ -14,13 +14,13 @@ use App\Http\Controllers\StudentAdminController;
 use App\Http\Controllers\Admin\CourseLecturesController;
 use App\Http\Controllers\Admin\StudentController;
 use Illuminate\Session\Middleware\StartSession;
-
-use App\Http\Controllers\Student\MyCoursesController;
+use App\Http\Controllers\Student\CourseController as StudentCourseController;
 use App\Http\Controllers\Admin\MeetingController;
-
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\CartController;
-
+use App\Http\Controllers\StudentInterestController;
+use App\Http\Controllers\Student\MyCoursesController;
+use Illuminate\Session\Middleware\CheckUserActive;
 
 /*
 |--------------------------------------------------------------------------
@@ -34,11 +34,20 @@ use App\Http\Controllers\CartController;
 */
 
 Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
-Route::middleware('auth:sanctum')->get('/profile', [AuthController::class, 'getUser']);
+Route::post('/login', [AuthController::class, 'login'])->name('login');
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+
+// endpoints for landing page
+Route::get('/courses', [StudentCourseController::class, 'getCourses']);
+Route::get('/courses/{id}', [StudentCourseController::class, 'getCourse']);
+Route::get('/courses/{id}/related', [StudentCourseController::class, 'getRelatedCourses']);
+
+Route::get('instructors', [LandingPageController::class, 'getInstructors']);
+Route::get('instructors/{id}', [LandingPageController::class, 'getInstructor']);
+
+
 Route::middleware([StartSession::class])->group(function () {
     // Social Login Routes
     Route::get('/auth/{provider}', [SocialController::class, 'redirectToProvider']);
@@ -82,33 +91,66 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 });
 
 
-Route::middleware(['auth:sanctum','ensure.single.device', 'role:student'])->group(function () {
+Route::middleware(['auth:sanctum', 'ensure.single.device', 'role:student'])->group(function () {
     Route::prefix('student')->group(function () {
+        Route::get('/profile', [AuthController::class, 'getProfile']);
+        //update student profile
+        Route::post('edit/{id}', [StudentController::class, 'update']);
         //cart
         Route::get('/cart', [CartController::class, 'index']);
         Route::post('/cart/add', [CartController::class, 'addToCart']);
         Route::delete('/cart/remove/{id}', [CartController::class, 'removeFromCart']);
         Route::post('/cart/checkout', [CartController::class, 'checkout']);
 
-        Route::get('payment-history', [PaymentController::class, 'getPaymentHistory']); // student
-
+        // Route::get('payment-history', [PaymentController::class, 'getPaymentHistory']); // student
         Route::get('/mycourses', [MyCoursesController::class, 'myCourses']);
         Route::get('/mycourses/{course}', [MyCoursesController::class, 'view']);
+        Route::prefix('/student/mycourses/{course}/lectures')->group(function () {
+            Route::get('/{lecture}', [MyCoursesController::class, 'getLectureDetails']);
+        });
+        Route::post('/student/mycourses/{course}/review', [MyCoursesController::class, 'addReview']);
+        Route::put('/student/mycourses/{course}/review', [MyCoursesController::class, 'updateReview']);
+        Route::delete('/student/mycourses/{course}/review', [MyCoursesController::class, 'deleteReview']);
 
+        Route::get('/mycourses', [StudentCourseController::class, 'myCourses']);
+        Route::get('/mycourses/{course}', [StudentCourseController::class, 'view']);
+        Route::get('/courses/{courseId}/feedback', [StudentCourseController::class, 'getCourseFeedback']);
+        Route::post('/courses/{courseId}/feedback', [StudentCourseController::class, 'submitCourseFeedback']);
+
+
+        // interested routes
+
+        Route::get('/interests/get', [StudentInterestController::class, 'index']);
+        Route::post('/interests/add', [StudentInterestController::class, 'store']);
+        Route::put('/interests/update/{id}', [StudentInterestController::class, 'update']);
+        Route::delete('/interests/delete/{id}', [StudentInterestController::class, 'destroy']);
+        Route::get('/interests/list', [StudentInterestController::class, 'showUserInterests']);
     });
 });
-
-Route::prefix('landingPage')->group(function () {
-    Route::get('instructors', [LandingPageController::class, 'getInstructors']);
-    Route::get('instructors/{id}', [LandingPageController::class, 'getInstructor']);
-});
-
-
-
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/paypal-payment', [PaymentController::class, 'paypalPayment']);
 });
 Route::get('/paypal-success', [PaymentController::class, 'paypalSuccess'])->name('paypal.success');
 Route::get('/paypal-cancel', [PaymentController::class, 'paypalCancel'])->name('paypal.cancel');
+
+Route::get('payments/export', [PaymentController::class, 'exportPaymentsReport']);
+Route::get('purchase', [PaymentController::class, 'getPaymentsReport']);
 Route::post('payments/process', [PaymentController::class, 'processPayment']);
+
+Route::post('payments/prepare', [PaymentController::class, 'createPaymentMethod']);
+
+Route::middleware(['auth:sanctum', 'ensure.single.device' , 'role:student', 'check.active'])->group(function () {
+    Route::get('payment-history', [PaymentController::class, 'getPaymentHistory']); // student
+    Route::get('/student/mycourses', [MyCoursesController::class, 'myCourses']);
+    Route::get('/student/mycourses/{course}', [MyCoursesController::class, 'view']);
+});
+
+
+Route::post('/login', [AuthController::class, 'login']);
+Route::post('/logout', [AuthController::class, 'logout']);
+
+Route::middleware(['auth:sanctum', 'check.active'])->group(function () {
+    Route::get('/admin/blocked-users', [AdminController::class, 'getBlockedUsers']);
+    Route::post('/admin/unblock-user/{id}', [AdminController::class, 'unblockUser']);
+});

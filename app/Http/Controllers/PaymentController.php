@@ -35,6 +35,9 @@ use App\Models\PlatformSetting;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\PaymentsReportExport;
 use Illuminate\Support\Facades\Log;
+use Stripe\PaymentMethod;
+use Laravel\Sanctum\PersonalAccessToken;
+
 class PaymentController extends Controller
 {
     public function getPaymentsReport()
@@ -74,12 +77,16 @@ class PaymentController extends Controller
     public function getPaymentHistory(Request $request)
     {
         $user = auth()->guard('sanctum')->user();
-
+        dd($user);
         // Ensure the user is authenticated
         if (!$user) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+            // Ensure the user is a student
+        if ($user->role !== 'student') {
+        return response()->json(['message' => 'Only students can access payment history'], 403);
+        }
         // Get the student record associated with the user
         $student = DB::table('students')->where('user_id', $user->id)->first();
 
@@ -131,136 +138,120 @@ class PaymentController extends Controller
             'mode' => config('paypal.mode', 'sandbox'), // Use 'sandbox' or 'live'
         ]);
     }
+
     
-    public function processPayment(Request $request)
+    public function createPaymentMethod(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'cart' => 'required|array|min:1',
-            'cart.*.course_id' => 'required|exists:courses,id',
-            'cart.*.amount' => 'required|numeric|min:1',
-            'cart.*.instructor_id' => 'required|exists:instructors,id',
-            'payment_method' => 'required|in:visa,Mastercard',
-            'card_number' => 'required|digits_between:13,19',
-            'card_exp_month' => 'required|numeric|min:1|max:12',
-            'card_exp_year' => 'required|numeric|min:' . date('Y'),
-            'card_cvc' => 'required|digits:3',
+            'payment_method' => 'required|in:visa,Mastercard'
         ]);
     
-        // If validation fails, return errors
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 400);
         }
     
-        // Check if card number is valid using Luhn algorithm
-        if (!$this->isValidCardNumber($request->card_number)) {
-            return response()->json(['error' => 'Invalid card number'], 400);
-        }
+        // Initialize Stripe with secret key
+        Stripe::setApiKey(env('STRIPE_SECRET'));
     
-        $cart = $request->cart;
-        $paymentMethod = $request->payment_method;
-        $student = $request->user();
-    
-        // Ensure the user is authenticated and linked to a student record
-        if (!$student) {
-            return response()->json(['error' => 'User not authenticated'], 401);
-        }
-    
-        $studentRecord = Student::where('user_id', $student->id)->first();
-        if (!$studentRecord) {
-            return response()->json(['error' => 'Student record not found for the authenticated user'], 404);
-        }
-    
-        DB::beginTransaction();
         try {
-            $totalAmount = 0;
-    
-            // Calculate total amount for the cart
-            foreach ($cart as $item) {
-                $totalAmount += $item['amount'];
-            }
-    
-            // Convert total amount to cents for Stripe (e.g., $10.50 becomes 1050)
-            $totalAmountCents = $totalAmount * 100;
-    
-            // Initialize Stripe with the secret key
-            Stripe::setApiKey(env('STRIPE_SECRET'));
-    
-            // Create a PaymentIntent to process the payment
-            $paymentIntent = PaymentIntent::create([
-                'amount' => $totalAmountCents,
-                'currency' => 'usd',
-                'payment_method_types' => ['card'],
-                'payment_method_data' => [
-                    'type' => 'card',
-                    'card' => [
-                        'number' => $request->card_number,
-                        'exp_month' => $request->card_exp_month,
-                        'exp_year' => $request->card_exp_year,
-                        'cvc' => $request->card_cvc,
-                    ],
+            // Create a payment method using Stripe's test tokens
+            $paymentMethod = PaymentMethod::create([
+                'type' => 'card',
+                'card' => [
+                    'token' => 'tok_visa' // Test token (use 'tok_mastercard' for Mastercard)
                 ],
-                'confirmation_method' => 'automatic',
-                'confirm' => true,
             ]);
     
-            // Check if the payment was successful
-            if ($paymentIntent->status !== 'succeeded') {
-                throw new Exception('Payment failed: ' . $paymentIntent->last_payment_error->message);
-            }
-    
-            // Process cart items and save payment records
-            foreach ($cart as $item) {
-                $courseId = $item['course_id'];
-                $amount = $item['amount'];
-                $instructorId = $item['instructor_id'];
-    
-                // Validate that the instructor matches the course
-                $course = Course::find($courseId);
-                if (!$course || $course->instructor_id != $instructorId) {
-                    throw new \Exception("Instructor ID $instructorId does not match course ID $courseId");
-                }
-    
-                $adminCommission = PlatformSetting::getAdminCommission(); // Admin commission percentage
-                $adminShare = ($amount * $adminCommission) / 100;
-                $instructorShare = $amount - $adminShare;
-    
-                $instructor = Instructor::find($instructorId);
-                if (!$instructor) {
-                    throw new \Exception("Instructor not found for ID $instructorId");
-                }
-    
-                // Record Payment
-                Payment::create([
-                    'amount' => $amount,
-                    'currency' => 'USD',
-                    'payment_method' => $paymentMethod,
-                    'payment_date' => now(),
-                    'transaction_code' => $paymentIntent->id, // Use Stripe's PaymentIntent ID
-                    'payment_status' => 'completed',
-                    'course_id' => $courseId,
-                    'student_id' => $studentRecord->id,
-                ]);
-    
-                // Record Enrollment
-                Enrollment::create([
-                    'course_id' => $courseId,
-                    'student_id' => $studentRecord->id,
-                ]);
-            }
-    
-            DB::commit();
-    
-            return response()->json([
-                'message' => 'Payment processed successfully!',
-                'total_amount' => $totalAmount,
-            ], 200);
-        } catch (Exception $e) {
-            DB::rollBack();
+            return response()->json(['payment_method_id' => $paymentMethod->id], 200);
+        } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
     
-    // Helper: Validate Card Number (Luhn Algorithm)
+
+    public function processPayment(Request $request)
+    {
+        try {
+            // Validate the request
+            $request->validate([
+                'cart' => 'required|array',
+                'cart.*.course_id' => 'required|integer',
+                'cart.*.amount' => 'required|numeric|min:1',
+                'cart.*.instructor_id' => 'required|integer',
+                'payment_method_id' => 'required|string',
+            ]);
+    
+            // Get authenticated user ID
+            $userId = auth()->id();
+    
+            // Retrieve the corresponding student ID from the students table
+            $student = \App\Models\Student::where('user_id', $userId)->first();
+    
+            if (!$student) {
+                return response()->json(['error' => 'Student not found for this user'], 400);
+            }
+    
+            $studentId = $student->id;
+    
+            // Initialize Stripe
+            \Stripe\Stripe::setApiKey(env('STRIPE_SECRET'));
+    
+            // Calculate total amount in cents
+            $totalAmount = collect($request->cart)->sum('amount') * 100;
+    
+            // Create a PaymentIntent with automatic payment methods
+            $paymentIntent = \Stripe\PaymentIntent::create([
+                'amount' => $totalAmount,
+                'currency' => 'USD',
+                'payment_method' => $request->payment_method_id,
+                'confirm' => true,
+                'automatic_payment_methods' => [
+                    'enabled' => true,
+                    'allow_redirects' => 'never'
+                ]
+            ]);
+    
+            // Get the base transaction code
+            $baseTransactionCode = $paymentIntent->id;
+    
+            // Save payments for each course (Ensure unique transaction codes)
+            foreach ($request->cart as $index => $item) {
+                $uniqueTransactionCode = $baseTransactionCode . '_' . $item['course_id'];
+    
+                // Ensure no duplicate transaction for the same course
+                $existingPayment = Payment::where('transaction_code', $uniqueTransactionCode)->first();
+                if ($existingPayment) {
+                    return response()->json(['error' => 'Duplicate transaction detected for course: ' . $item['course_id']], 400);
+                }
+    
+                Payment::create([
+                    'amount' => $item['amount'],
+                    'currency' => 'USD',
+                    'payment_method' => $request->payment_method_id,
+                    'payment_date' => now(),
+                    'transaction_code' => $uniqueTransactionCode, // Unique for each course
+                    'payment_status' => 'completed',
+                    'course_id' => $item['course_id'],
+                    'student_id' => $studentId, 
+                ]);
+
+                    Enrollment::create([
+                    'course_id' => $item['course_id'],
+                    'student_id' => $studentId,
+                ]);
+            }
+    
+            return response()->json([
+                'message' => 'Payment processed successfully',
+                'transaction_code' => $baseTransactionCode,
+            ], 200);
+        } catch (\Stripe\Exception\CardException $e) {
+            return response()->json(['error' => $e->getMessage()], 400);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+    
     private function isValidCardNumber($number)
     {
         $number = preg_replace('/\D/', '', $number);
@@ -287,34 +278,31 @@ class PaymentController extends Controller
             'cart.*.amount' => 'required|numeric|min:1',
             'cart.*.instructor_id' => 'required|exists:instructors,id',
         ]);
-
+    
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 400);
         }
-
+    
         $cart = $request->cart;
         $student = $request->user();
-
+    
         if (!$student) {
             return response()->json(['error' => 'User not authenticated'], 401);
         }
-
+    
         $studentRecord = Student::where('user_id', $student->id)->first();
         if (!$studentRecord) {
             return response()->json(['error' => 'Student record not found'], 404);
         }
-
+    
         DB::beginTransaction();
         try {
-            $totalAmount = 0;
-            foreach ($cart as $item) {
-                $totalAmount += $item['amount'];
-            }
-
+            $totalAmount = collect($cart)->sum('amount');
+    
             $paypal = new PayPalClient;
             $paypal->setApiCredentials(config('paypal'));
             $paypal->getAccessToken();
-
+    
             $response = $paypal->createOrder([
                 "intent" => "CAPTURE",
                 "purchase_units" => [
@@ -330,14 +318,16 @@ class PaymentController extends Controller
                     "cancel_url" => route('paypal.cancel'),
                 ],
             ]);
-
+    
+            Log::info('PayPal Order Created', ['response' => $response]);
+    
             if (!isset($response['id'])) {
-                throw new \Exception('Failed to create PayPal order');
+                throw new \Exception('Failed to create PayPal order: ' . json_encode($response));
             }
-
+    
             DB::commit();
             $approvalUrl = collect($response['links'])->firstWhere('rel', 'approve')['href'];
-
+    
             return response()->json([
                 'success' => true,
                 'message' => 'Redirect to PayPal for payment.',
@@ -345,48 +335,56 @@ class PaymentController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('PayPal Payment Error: ' . $e->getMessage());
+            Log::error('PayPal Payment Error', ['error' => $e->getMessage()]);
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
+    
 
     public function paypalSuccess(Request $request)
     {
         $paymentId = $request->query('token');
         $payerId = $request->query('PayerID');
-
+    
         if (!$paymentId || !$payerId) {
             return response()->json(['error' => 'Invalid PayPal response'], 400);
         }
-
+    
         DB::beginTransaction();
         try {
             $paypal = new PayPalClient;
             $paypal->setApiCredentials(config('paypal'));
             $paypal->getAccessToken();
-
+    
             $captureResponse = $paypal->capturePaymentOrder($paymentId);
-
-            if (!isset($captureResponse['status']) || $captureResponse['status'] !== 'COMPLETED') {
-                throw new \Exception('PayPal payment capture failed');
+    
+            // Log the full response for debugging
+            Log::info('PayPal Capture Response', ['response' => $captureResponse]);
+    
+            if (!isset($captureResponse['status'])) {
+                throw new \Exception('Invalid PayPal capture response: ' . json_encode($captureResponse));
             }
-
+    
+            if ($captureResponse['status'] !== 'COMPLETED') {
+                throw new \Exception('PayPal payment not completed: ' . json_encode($captureResponse));
+            }
+    
             $student = auth()->user();
             $studentRecord = Student::where('user_id', $student->id)->first();
             if (!$studentRecord) {
                 throw new \Exception('Student record not found');
             }
-
+    
             $cart = session('cart');
             if (!$cart) {
                 throw new \Exception('Cart session expired');
             }
-
+    
             foreach ($cart as $item) {
                 $courseId = $item['course_id'];
                 $amount = $item['amount'];
                 $instructorId = $item['instructor_id'];
-
+    
                 Payment::create([
                     'amount' => $amount,
                     'currency' => 'USD',
@@ -397,13 +395,13 @@ class PaymentController extends Controller
                     'course_id' => $courseId,
                     'student_id' => $studentRecord->id,
                 ]);
-
+    
                 Enrollment::create([
                     'course_id' => $courseId,
                     'student_id' => $studentRecord->id,
                 ]);
             }
-
+    
             DB::commit();
             return response()->json(['message' => 'Payment successful'], 200);
         } catch (\Exception $e) {
@@ -412,9 +410,11 @@ class PaymentController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
+    
 
     public function paypalCancel()
     {
+        Log::info('PayPal Payment Canceled');
         return response()->json(['message' => 'Payment canceled']);
     }
 

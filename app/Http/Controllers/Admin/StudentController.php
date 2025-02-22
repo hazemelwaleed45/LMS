@@ -167,9 +167,13 @@ class StudentController extends Controller
         if ($validator->fails()) {
             return response()->json(['error' => $validator->errors()], 422);
         }
-
+        // Ensure only the admin or the student (owner) can update the profile
+        $user = auth()->user();
+        if ($user->role !== 'admin' && $user->id !== $student->user_id) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
         // Update the user if needed
-        $user = $student->user;
+       $user = $student->user;
         if ($request->has('email') || $request->has('password')) {
             if ($request->has('email')) {
                 $user->email = $request->email;

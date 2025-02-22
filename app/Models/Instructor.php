@@ -46,4 +46,12 @@ class Instructor extends Model
     {
         return $this->hasMany(Course::class);
     }
+
+    public function averageRating()
+    {
+        // Get all course IDs for this instructor
+        $courseIds = $this->courses()->pluck('id');
+        $averageRating = Review::whereIn('course_id', $courseIds)->avg('rating');
+        return round($averageRating, 2);
+    }
 }

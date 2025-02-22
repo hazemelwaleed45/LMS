@@ -6,10 +6,6 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\ValidationException;
-use Laravel\Socialite\Facades\Socialite;
-use Firebase\JWT\JWT;
-use Firebase\JWT\Key;
 use Illuminate\Support\Facades\Validator;
 use App\Mail\OtpMail;
 use Illuminate\Support\Facades\Mail;
@@ -107,34 +103,6 @@ class AuthController extends Controller
         ], 201);
     }
 
-    // public function login(Request $request)
-    // {
-    //     $rules = [
-    //         'email' => 'required|email',
-    //         'password' => 'required',
-    //     ];
-
-    //     $validator = Validator::make($request->all(), $rules);
-
-    //     if ($validator->fails()) {
-    //         return response()->json(['errors' => $validator->errors()], 422);
-    //     }
-
-    //     if (!Auth::attempt($request->only('email', 'password'))) {
-    //         return response()->json(['message' => 'Invalid credentials'], 401);
-    //     }
-    //     $user = Auth::user();
-    //     $token = $request->user()->createToken('auth_token')->plainTextToken;
-    //     $tokenParts = explode('|', $token);
-    //     return response()->json([
-    //         'token' => $tokenParts,
-    //         'user' => [
-    //             'id' => $user->id,
-    //             'email' => $user->email,
-    //             'role' => $user->role,
-    //         ],
-    //     ], 200);
-    // }
     public function login(Request $request)
     {
         $rules = [
@@ -148,132 +116,79 @@ class AuthController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        // Retrieve the user FIRST before checking authentication
+        $user = User::where('email', $request->email)->first();
+
+        // If user doesn't exist, return invalid credentials
+        if (!$user) {
+            return response()->json(['message' => 'Invalid credentials'], 401);
+        }
+
+        // If the specific user is blocked, prevent login
+        if ($user->active == 2) {
+            return response()->json(['message' => 'Your account is blocked. Contact admin.'], 403);
+        }
+
+        // Now, attempt authentication AFTER ensuring the user isn't blocked
         if (!Auth::attempt($request->only('email', 'password'))) {
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
+
+        // Refresh user data after login
         $user = Auth::user();
 
-        // Generate a new unique device token
-        $deviceToken = Str::random(32);
+        // Allow admins to log in from multiple devices
+        // if ($user->role === 'admin') {
+        //     $token = $user->createToken('auth_token')->plainTextToken;
 
-        // If the user is already logged in from another device, force logout
-        if ($user->device_token) {
-            $user->tokens()->delete(); // Revoke all previous tokens
+        //     return response()->json([
+        //         'token' => $token,
+        //         'user' => [
+        //             'id' => $user->id,
+        //             'email' => $user->email,
+        //             'role' => $user->role,
+        //         ],
+        //         'message' => 'Admin login successful.'
+        //     ], 200);
+        // }
+
+        // If a student is already logged in from another device
+        if ($user->active == 1) {
+            // Force logout all active sessions
+            $user->tokens()->delete();
+
+            // Block the user from logging in
+            $user->update([
+                'device_token' => null,
+                'active' => 2
+            ]);
+
+            return response()->json(['message' => 'You have been blocked for attempting to log in from another device. Contact admin.'], 403);
         }
 
-        // Update user record with new device token
-        $user->update(['device_token' => $deviceToken]);
+        // Generate a new device token
+        $deviceToken = Str::random(32);
+
+        // Update user status and device token
+        $user->update([
+            'device_token' => $deviceToken,
+            'active' => 1, // Mark as active
+        ]);
 
         // Generate new authentication token
         $token = $user->createToken('auth_token')->plainTextToken;
-        $parts = explode('|', $token);
-        $tokenId = $parts[0];
-        $tokenPlain = $parts[1];
-        if (count($parts) !== 2) {
-            return response()->json(['error' => 'Invalid token format'], 400);
-        }
-        $tokens = PersonalAccessToken::find($tokenId);
 
-        if (!$tokens || !$tokens->token) {
-            return response()->json(['error' => 'Invalid or expired token'], 401);
-        }
-
-        if (!hash_equals($tokens->token, hash('sha256', $tokenPlain))) {
-            return response()->json(['error' => 'Invalid or expired token'], 401);
-        }
-
-        $user = $tokens->tokenable;
-        return response()->json(['user' => $user]);
-
-        // return response()->json([
-        //     'message' => 'Login successful',
-        //     'token' => $token,
-        //     'user' => [
-        //         'id' => $user->id,
-        //         'email' => $user->email,
-        //         'role' => $user->role,
-        //         'details' => $userDetails,
-        //     ]
-        // ], 200);
-        // return response()->json([
-        //     'token' => $token,
-        //     'user' => [
-        //         'id' => $user->id,
-        //         'email' => $user->email,
-        //         'role' => $user->role,
-        //     ],
-        //     'message' => 'Login successful. Previous session (if any) has been logged out.'
-        // ], 200);
+        return response()->json([
+            'token' => $token,
+            'user' => [
+                'id' => $user->id,
+                'email' => $user->email,
+                'role' => $user->role,
+            ],
+            'message' => 'Login successful.'
+        ], 200);
     }
-//     public function login(Request $request)
-// {
-//     $rules = [
-//         'email' => 'required|email',
-//         'password' => 'required',
-//     ];
-
-//     $validator = Validator::make($request->all(), $rules);
-
-//     if ($validator->fails()) {
-//         return response()->json(['errors' => $validator->errors()], 422);
-//     }
-
-//     if (!Auth::attempt($request->only('email', 'password'))) {
-//         return response()->json(['message' => 'Invalid credentials'], 401);
-//     }
-
-//     $user = Auth::user();
-//     $deviceToken = Str::random(32);
-//     if ($user->device_token) {
-//         $user->tokens()->delete();
-//     }
-//     $user->update(['device_token' => $deviceToken]);
-
-//     $token = $user->createToken('auth_token')->plainTextToken;
-
-
-//     $request->headers->set('Authorization', 'Bearer ' . $token);
-
-//     // Get user details using the existing getUser function
-//     $userResponse = $this->getUser($request);
-
-//     // // Extract response data
-//     $userData = json_decode($userResponse->getContent(), true);
-
-//     // Add the token to the response
-//     $userData['token'] = $token;
-
-//     return response()->json($userData, 200);
-// }
-
-    public function getUser(Request $request)
-    {
-    $user = $request->user();
-
-    if (!$user) {
-        return response()->json(['message' => 'Unauthorized'], 401);
-    }
-
-    if ($user->role === 'student') {
-        $userDetails = $user->student;
-    } elseif ($user->role === 'instructor') {
-        $userDetails = $user->instructor;
-    } elseif ($user->role === 'admin') {
-        $userDetails = $user->admin;
-    } else {
-        $userDetails = null;
-    }
-
-    return response()->json([
-        'user' => [
-            'id' => $user->id,
-            'email' => $user->email,
-            'role' => $user->role,
-            'details' => $userDetails,
-        ]
-    ], 200);
-}
 
     public function logout(Request $request)
     {
@@ -282,19 +197,14 @@ class AuthController extends Controller
         // Revoke all user tokens
         $user->tokens()->delete();
 
-        // Clear the device token
-        $user->update(['device_token' => null]);
+        // Clear the device token and set active status to 0
+        $user->update([
+            'device_token' => null,
+            'active' => 0, // Mark as logged out
+        ]);
 
         return response()->json(['message' => 'Logout successful']);
     }
-
-    // public function logout(Request $request)
-    // {
-    //     $request->user()->tokens()->delete();
-
-    //     return response()->json(['message' => 'Logout successful']);
-    // }
-
     public function forgotPassword(Request $request)
     {
         $rules = [
@@ -363,6 +273,66 @@ class AuthController extends Controller
         ]);
 
         return response()->json(['message' => 'Password reset successful'], 200);
+    }
+    public function getUser(Request $request)
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if ($user->role === 'student') {
+            $userDetails = $user->student;
+        } elseif ($user->role === 'instructor') {
+            $userDetails = $user->instructor;
+        } elseif ($user->role === 'admin') {
+            $userDetails = $user->admin;
+        } else {
+            $userDetails = null;
+        }
+
+        return response()->json([
+            'user' => [
+                'id' => $user->id,
+                'email' => $user->email,
+                'role' => $user->role,
+                'details' => $userDetails,
+            ]
+        ], 200);
+    }
+    public function getProfile(Request $request)
+    {
+        $lang = $request->header('Accept-Language', 'ar');
+
+        $authUser = Auth::user();
+        if (!$authUser) {
+            return response()->json(['error' => trans('messages.user_not_found', [], $lang)], 404);
+        }
+
+        if (!$authUser->hasRole('student')) {
+            return response()->json(['error' => trans('messages.unauthorized_access', [], $lang)], 403);
+        }
+
+        $student = $authUser->student;
+        if (!$student) {
+            return response()->json(['error' => trans('messages.student_data_not_found', [], $lang)], 404);
+        }
+
+        $responseData = [
+            'id' => $student->id,
+            'first_name' => $student->first_name,
+            'last_name' => $student->last_name,
+            'username' => $student->username,
+            'date_of_birth' => $student->date_of_birth,
+            'gender' => $student->gender,
+            'phone' => $student->phone,
+            'education' => $student->education,
+            'image' => $student->image,
+            'interests' => $student->interests,
+        ];
+
+        return response()->json(['data' => $responseData], 200);
     }
 
 }
