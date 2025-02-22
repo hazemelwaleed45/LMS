@@ -138,22 +138,6 @@ class AuthController extends Controller
         // Refresh user data after login
         $user = Auth::user();
 
-        // Allow admins to log in from multiple devices
-        // if ($user->role === 'admin') {
-        //     $token = $user->createToken('auth_token')->plainTextToken;
-
-        //     return response()->json([
-        //         'token' => $token,
-        //         'user' => [
-        //             'id' => $user->id,
-        //             'email' => $user->email,
-        //             'role' => $user->role,
-        //         ],
-        //         'message' => 'Admin login successful.'
-        //     ], 200);
-        // }
-
-        // If a student is already logged in from another device
         if ($user->active == 1) {
             // Force logout all active sessions
             $user->tokens()->delete();
