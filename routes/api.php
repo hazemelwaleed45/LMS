@@ -43,6 +43,7 @@ Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 Route::get('/courses', [StudentCourseController::class, 'getCourses']);
 Route::get('/courses/{id}', [StudentCourseController::class, 'getCourse']);
 Route::get('/courses/{id}/related', [StudentCourseController::class, 'getRelatedCourses']);
+Route::get('/PopularCourses', [StudentCourseController::class, 'getPopularCourses']);
 
 Route::get('instructors', [LandingPageController::class, 'getInstructors']);
 Route::get('instructors/{id}', [LandingPageController::class, 'getInstructor']);
@@ -93,7 +94,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 
 Route::middleware(['auth:sanctum', 'ensure.single.device', 'role:student'])->group(function () {
     Route::prefix('student')->group(function () {
-        Route::get('/profile', [AuthController::class, 'getProfile']);
+        Route::get('/profile', [AuthController::class, 'getUser']);
         //update student profile
         Route::post('edit/{id}', [StudentController::class, 'update']);
         //cart
@@ -103,8 +104,7 @@ Route::middleware(['auth:sanctum', 'ensure.single.device', 'role:student'])->gro
         Route::post('/cart/checkout', [CartController::class, 'checkout']);
 
         // Route::get('payment-history', [PaymentController::class, 'getPaymentHistory']); // student
-        Route::get('/mycourses', [MyCoursesController::class, 'myCourses']);
-        Route::get('/mycourses/{course}', [MyCoursesController::class, 'view']);
+
         Route::prefix('/student/mycourses/{course}/lectures')->group(function () {
             Route::get('/{lecture}', [MyCoursesController::class, 'getLectureDetails']);
         });

@@ -107,11 +107,11 @@ class CourseController extends Controller
     {
         // cache the course
         $cacheKey = "course_" . $id;
-        // $cachedData = cache()->get($cacheKey);
+        $cachedData = cache()->get($cacheKey);
 
-        // if ($cachedData) {
-        //     return response()->json($cachedData, 200);
-        // }
+        if ($cachedData) {
+            return response()->json($cachedData, 200);
+        }
         // fetch the course from the database and cache the course
         $course = Course::with([
             'category:id,name',
@@ -177,7 +177,7 @@ class CourseController extends Controller
             'course_rating' => $courseRating,
             'students_feedbacks' => $studentsFeedbacks,
         ];
-       // cache()->put($cacheKey, $data, now()->addMinutes(60));
+        cache()->put($cacheKey, $data, now()->addMinutes(60));
         return response()->json(['data' => $data], 200);
     }
 
@@ -261,5 +261,33 @@ class CourseController extends Controller
         $course->save();
 
         return response()->json(['message' => 'Course review submitted successfully'], 201);
+    }
+
+    public function getPopularCourses(Request $request)
+    {
+        // Fetch popular courses based on enrollments & ratings
+        $popularCourses = Course::withCount('enrollments')
+            ->with('reviews')
+            ->orderByDesc('enrollments_count') // Sort by highest enrollments
+            ->orderByDesc('rate') // Then by rating
+            ->take(4) // Get top 4 popular courses
+            ->get();
+
+        // Format the response
+        $courses = $popularCourses->map(function ($course) {
+            return [
+                'id' => $course->id,
+                'title' => $course->title,
+                'image' => $course->image
+                    ? Storage::disk('public')->url('images/courses/' . $course->image)
+                    : null,
+                'category_name' => $course->category ? $course->category->name : null,
+                'instructor_name' => $course->instructor ? $course->instructor->name : null,
+            ];
+        });
+
+        return response()->json([
+            'popular_courses' => $courses
+        ], 200);
     }
 }
