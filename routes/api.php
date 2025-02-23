@@ -92,7 +92,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 });
 
 
-Route::middleware(['auth:sanctum', 'ensure.single.device', 'role:student'])->group(function () {
+Route::middleware(['auth:sanctum', 'ensure.single.device', 'role:student', 'check.active'])->group(function () {
     Route::prefix('student')->group(function () {
         Route::get('/profile', [AuthController::class, 'getUser']);
         //update student profile
@@ -103,14 +103,11 @@ Route::middleware(['auth:sanctum', 'ensure.single.device', 'role:student'])->gro
         Route::delete('/cart/remove/{id}', [CartController::class, 'removeFromCart']);
         Route::post('/cart/checkout', [CartController::class, 'checkout']);
 
-        // Route::get('payment-history', [PaymentController::class, 'getPaymentHistory']); // student
+        Route::get('payment-history', [PaymentController::class, 'getPaymentHistory']); // student
 
-        Route::prefix('/student/mycourses/{course}/lectures')->group(function () {
+        Route::prefix('/mycourses/{course}/lectures')->group(function () {
             Route::get('/{lecture}', [MyCoursesController::class, 'getLectureDetails']);
         });
-        Route::post('/student/mycourses/{course}/review', [MyCoursesController::class, 'addReview']);
-        Route::put('/student/mycourses/{course}/review', [MyCoursesController::class, 'updateReview']);
-        Route::delete('/student/mycourses/{course}/review', [MyCoursesController::class, 'deleteReview']);
 
         Route::get('/mycourses', [StudentCourseController::class, 'myCourses']);
         Route::get('/mycourses/{course}', [StudentCourseController::class, 'view']);
@@ -139,16 +136,6 @@ Route::get('purchase', [PaymentController::class, 'getPaymentsReport']);
 Route::post('payments/process', [PaymentController::class, 'processPayment']);
 
 Route::post('payments/prepare', [PaymentController::class, 'createPaymentMethod']);
-
-Route::middleware(['auth:sanctum', 'ensure.single.device' , 'role:student', 'check.active'])->group(function () {
-    Route::get('payment-history', [PaymentController::class, 'getPaymentHistory']); // student
-    Route::get('/student/mycourses', [MyCoursesController::class, 'myCourses']);
-    Route::get('/student/mycourses/{course}', [MyCoursesController::class, 'view']);
-});
-
-
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/logout', [AuthController::class, 'logout']);
 
 Route::middleware(['auth:sanctum', 'check.active'])->group(function () {
     Route::get('/admin/blocked-users', [AdminController::class, 'getBlockedUsers']);
