@@ -59,6 +59,7 @@ Route::middleware([StartSession::class])->group(function () {
 // create routes group for admin
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::prefix('admin')->group(function () {
+        Route::get('/profile', [AuthController::class, 'getUser']);
         Route::apiResource('instructors', InstructorController::class)->except('update');
         Route::Post('instructors/{id}', [InstructorController::class, 'update']);
 

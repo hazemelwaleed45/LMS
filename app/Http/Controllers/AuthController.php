@@ -272,7 +272,10 @@ class AuthController extends Controller
         } elseif ($user->role === 'instructor') {
             $userDetails = $user->instructor;
         } elseif ($user->role === 'admin') {
-            $userDetails = $user->admin;
+            $userDetails = [
+                'name' => $user->admin->name,
+                'paypal_account' => $user->admin->paypal_account,
+            ];
         } else {
             $userDetails = null;
         }
