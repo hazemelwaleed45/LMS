@@ -287,4 +287,38 @@ class AuthController extends Controller
         ], 200);
     }
 
+    public function updatePassword(Request $request)
+    {
+          // Validate the request with Validator facade
+          $validator = Validator::make($request->all(), [
+            'current_password' => 'required|string',
+            'new_password' => 'required|string|min:8',
+            'confirm_new_password' => 'required|string|same:new_password',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        // Get the authenticated user
+        $user = Auth::user();
+
+        // dd($user->password);
+        if ($request->current_password== $request->new_password) {
+            return response()->json(['error' => 'Enter a new password '], 401);
+        }
+
+        // Check if the current password matches
+        if (!Hash::check($request->current_password, $user->password)) {
+            return response()->json(['error' => 'Current password is incorrect'], 401);
+        }
+
+        // Update the password
+        $user->update([
+            'password' => Hash::make($request->new_password)
+        ]);
+
+        return response()->json(['message' => 'Password updated successfully!'], 200);
+    }
+
 }

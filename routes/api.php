@@ -38,6 +38,7 @@ Route::post('/login', [AuthController::class, 'login'])->name('login');
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+Route::post('/update-password', [AuthController::class, 'updatePassword'])->middleware('auth:sanctum');
 
 // endpoints for landing page
 Route::get('/courses', [StudentCourseController::class, 'getCourses']);
@@ -148,7 +149,7 @@ Route::middleware(['auth:sanctum', 'ensure.single.device' , 'role:student', 'che
 
 
 Route::post('/login', [AuthController::class, 'login']);
-Route::post('/logout', [AuthController::class, 'logout']);
+//Route::post('/logout', [AuthController::class, 'logout']);
 
 Route::middleware(['auth:sanctum', 'check.active'])->group(function () {
     Route::get('/admin/blocked-users', [AdminController::class, 'getBlockedUsers']);
