@@ -25,8 +25,8 @@ class CoursesSeeder extends Seeder
                 'category_id' => 1, // Mathematics
                 'instructor_id' => 1, // Omar Sehly
                 'major' => 'Mathematics',
-                'prerequister' => 'Basic Mathematics',
-                'semster' => 'semster1',
+                'prerequisite' => 'Basic Mathematics',
+                'semester' => 'semester1',
                 "course_level" => "advanced",
                 "introduction_vedio_path" =>"storage/videos/laravel-advanced.mp4"
             ],
@@ -44,8 +44,8 @@ class CoursesSeeder extends Seeder
                 'category_id' => 1, // Mathematics
                 'instructor_id' => 1, // Omar Sehly
                 'major' => 'Mathematics',
-                'prerequister' => 'None',
-                'semster' => 'semster2',
+                'prerequisite' => 'None',
+                'semester' => 'semester2',
                 "course_level" => "beginners",
                 "introduction_vedio_path" =>"storage/videos/laravel-beginners.mp4"
             ],
@@ -63,8 +63,8 @@ class CoursesSeeder extends Seeder
                 'category_id' => 1, // Mathematics
                 'instructor_id' => 1, // Omar Sehly
                 'major' => 'Mathematics',
-                'prerequister' => 'Basic Algebra',
-                'semster' => 'semster2',
+                'prerequisite' => 'Basic Algebra',
+                'semester' => 'semester2',
                 "course_level" => "intermediate",
                 "introduction_vedio_path" =>"storage/videos/laravel-intermediate.mp4"
             ],
@@ -84,8 +84,7 @@ class CoursesSeeder extends Seeder
                 'category_id' => 2, // Physics
                 'instructor_id' => 2, // Mohamed Ibrahim
                 'major' => 'Physics',
-                'prerequister' => 'Basic Physics',
-                'semster' => 'semster1',
+                'prerequisite' => 'Basic Physics',
                 "course_level" => "intermediate",
                 "introduction_vedio_path" =>"storage/videos/laravel-intermediate0.mp4"
             ],
@@ -103,8 +102,8 @@ class CoursesSeeder extends Seeder
                 'category_id' => 2, // Physics
                 'instructor_id' => 2, // Mohamed Ibrahim
                 'major' => 'Physics',
-                'prerequister' => 'None',
-                'semster' => 'semster1',
+                'prerequisite' => 'None',
+                'semester' => 'semester1',
                 "course_level" => "beginners",
                 "introduction_vedio_path" =>"storage/videos/laravel-beginners0.mp4"
             ],
@@ -122,8 +121,8 @@ class CoursesSeeder extends Seeder
                 'category_id' => 2, // Physics
                 'instructor_id' => 2, // Mohamed Ibrahim
                 'major' => 'Physics',
-                'prerequister' => 'Basic Thermodynamics',
-                'semster' => 'semster2',
+                'prerequisite' => 'Basic Thermodynamics',
+                'semester' => 'semester2',
                 "course_level" => "advanced",
                 "introduction_vedio_path" =>"storage/videos/laravel-advanced0.mp4"
             ],

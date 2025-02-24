@@ -26,8 +26,8 @@ return new class extends Migration
             $table->unsignedBigInteger('category_id');
             $table->unsignedBigInteger('instructor_id');
             $table->string('major')->nullable();
-            $table->string('prerequister')->nullable();
-            $table->enum('semster', ['semster1', 'semster2']);
+            $table->string('prerequisite')->nullable();
+            $table->enum('semester', ['semester1', 'semester2']);
             $table->foreign('category_id')->references('id')->on('categories')->onDelete('cascade');
             $table->foreign('instructor_id')->references('id')->on('instructors')->onDelete('cascade');
             $table->timestamps();

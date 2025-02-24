@@ -25,30 +25,44 @@ class LectureStoreRequest extends FormRequest
     {
         return [
             'title' => 'required|string|min:3|max:255|unique:lectures,title',
-            'description' => 'required|string|min:3|max:500',
-            'content' => 'nullable|string',
-            'content_url' => 'nullable|url',
+            'description' => 'nullable|string|min:3|max:500',
+            'lecture_attachments' => 'nullable|array',
+            'lecture_attachments.*.name' => 'required|string',
+            'lecture_attachments.*.file_extension' => 'required|string|in:pdf,docx,mp4',
+            'lecture_attachments.*.size' => 'required|string',
+            'file' => 'required|file|mimes:pdf,docx,mp4|max:10240', 
             'duration' => 'required|integer|min:1',
-            'file' => 'nullable|file|mimes:pdf,docx,mp4|max:10240',
             'course_id' => 'required|exists:courses,id',
         ];
     }
+
     public function storeLecture(Course $course)
     {
         return DB::transaction(function () use ($course) {
             $filePath = null;
+            $fileData = null;
+
             if ($this->hasFile('file')) {
-                $filePath = $this->file('file')->store('course_lecture', 'public');
+                $file = $this->file('file');
+                $filePath = $file->store('uploads/lectures', 'public');
+
+                $fileData = [
+                    'name' => $file->getClientOriginalName(),
+                    'size' => $file->getSize() . ' bytes',
+                    'file_extension' => $file->getClientOriginalExtension(),
+                    'path' => $filePath,
+                ];
             }
+
             $lecture = $course->lectures()->create([
                 'title' => $this->title,
                 'description' => $this->description,
-                'content' => $this->content,
-                'content_url' => $this->content_url,
+                'lecture_attachments' => $fileData,
                 'duration' => $this->duration,
-                'file' => $filePath,
             ]);
+
             return $lecture->refresh();
         });
     }
+
 }

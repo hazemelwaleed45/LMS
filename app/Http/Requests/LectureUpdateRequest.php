@@ -26,10 +26,12 @@ class LectureUpdateRequest extends FormRequest
         return [
             'title' => 'sometimes|string|min:3|max:255',
             'description' => 'sometimes|string|min:3|max:500',
-            'content' => 'sometimes|nullable|string',
-            'content_url' => 'sometimes|nullable|url',
+            'lecture_attachments' => 'nullable|array',
+            'lecture_attachments.*.attachment_id' => 'required|string',
+            'lecture_attachments.*.name' => 'required|string',
+            'lecture_attachments.*.file_extension' => 'required|string|in:.pdf,.docx,.mp4',
+            'lecture_attachments.*.size' => 'required|string',
             'duration' => 'sometimes|integer|min:1',
-            'file' => 'sometimes|nullable|file|mimes:pdf,docx,mp4|max:10240',
             'course_id' => 'sometimes|exists:courses,id',
         ];
     }
@@ -47,10 +49,7 @@ class LectureUpdateRequest extends FormRequest
             $lecture->update([
                 'title' => $this->exists('title') ? $this->title : $lecture->title,
                 'description' => $this->exists('description') ? $this->description : $lecture->description,
-                'content' => $this->exists('content') ? $this->content : $lecture->content,
-                'content_url' => $this->exists('content_url') ? $this->content_url : $lecture->content_url,
                 'duration' => $this->exists('duration') ? $this->duration : $lecture->duration,
-                'file' => $filePath,
                 'course_id' => $this->exists('course_id') ? $this->course_id : $lecture->course_id,
             ]);
             return $lecture->refresh();

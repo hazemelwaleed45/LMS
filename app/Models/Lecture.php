@@ -11,14 +11,14 @@ class Lecture extends Model
 
     protected $fillable = [
         'title',
-        'content',
         'description',
-        'content_url',
+        'lecture_attachments',
         'duration',
         'course_id',
-        'file',
     ];
-
+    protected $casts = [
+        'lecture_attachments' => 'array',
+    ];
     public function course()
     {
         return $this->belongsTo(Course::class);
