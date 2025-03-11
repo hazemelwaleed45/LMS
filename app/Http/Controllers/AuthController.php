@@ -259,36 +259,7 @@ class AuthController extends Controller
 
         return response()->json(['message' => 'Password reset successful'], 200);
     }
-    public function getUser(Request $request)
-    {
-        $user = $request->user();
-
-        if (!$user) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
-
-        if ($user->role === 'student') {
-            $userDetails = $user->student;
-        } elseif ($user->role === 'instructor') {
-            $userDetails = $user->instructor;
-        } elseif ($user->role === 'admin') {
-            $userDetails = [
-                'name' => $user->admin->name,
-                'paypal_account' => $user->admin->paypal_account,
-            ];
-        } else {
-            $userDetails = null;
-        }
-
-        return response()->json([
-            'user' => [
-                'id' => $user->id,
-                'email' => $user->email,
-                'role' => $user->role,
-                'details' => $userDetails,
-            ]
-        ], 200);
-    }
+ 
 
     public function updatePassword(Request $request)
     {
