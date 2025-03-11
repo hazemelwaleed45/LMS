@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Notifications\ResetPasswordNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
@@ -11,6 +12,7 @@ use App\Mail\OtpMail;
 use Illuminate\Support\Facades\Mail;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Password;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
@@ -103,121 +105,129 @@ class AuthController extends Controller
         ], 201);
     }
 
-    public function login(Request $request)
-    {
-        $rules = [
-            'email' => 'required|email',
-            'password' => 'required',
-        ];
+  public function login(Request $request)
+{
+    $rules = [
+        'email' => 'required|email',
+        'password' => 'required',
+    ];
 
-        $validator = Validator::make($request->all(), $rules);
+    $validator = Validator::make($request->all(), $rules);
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        // Retrieve the user FIRST before checking authentication
-        $user = User::where('email', $request->email)->first();
-
-        // If user doesn't exist, return invalid credentials
-        if (!$user) {
-            return response()->json(['message' => 'Invalid credentials'], 401);
-        }
-
-        // If the specific user is blocked, prevent login
-        if ($user->active == 2) {
-            return response()->json(['message' => 'Your account is blocked. Contact admin.'], 403);
-        }
-
-        // Now, attempt authentication AFTER ensuring the user isn't blocked
-        if (!Auth::attempt($request->only('email', 'password'))) {
-            return response()->json(['message' => 'Invalid credentials'], 401);
-        }
-
-
-        // Refresh user data after login
-        $user = Auth::user();
-
-        if ($user->active == 1) {
-            // Force logout all active sessions
-            $user->tokens()->delete();
-
-            // Block the user from logging in
-            $user->update([
-                'device_token' => null,
-                'active' => 2
-            ]);
-
-            return response()->json(['message' => 'You have been blocked for attempting to log in from another device. Contact admin.'], 403);
-        }
-
-        // Generate a new device token
-        $deviceToken = Str::random(32);
-
-        // Update user status and device token
-        $user->update([
-            'device_token' => $deviceToken,
-            'active' => 1, // Mark as active
-        ]);
-
-        // Generate new authentication token
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'token' => $token,
-            'user' => [
-                'id' => $user->id,
-                'email' => $user->email,
-                'role' => $user->role,
-            ],
-            'device_token' => $deviceToken,
-            'message' => 'Login successful.'
-        ], 200);
+    if ($validator->fails()) {
+        return response()->json(['errors' => $validator->errors()], 422);
     }
 
-    public function logout(Request $request)
-    {
-        $user = $request->user();
-        $user->tokens()->delete();
+    // Retrieve the user FIRST before checking authentication
+    $user = User::where('email', $request->email)->first();
 
-        // Clear the device token and set active status to 0
+    // If user doesn't exist, return invalid credentials
+    if (!$user || !Hash::check($request->password, $user->password)) {
+        return response()->json(['message' => 'Invalid credentials'], 401);
+    }
+
+    // Check if the user is blocked
+    if ($user->active == 2) {
+        return response()->json(['message' => 'Your account is blocked. Contact admin.'], 403);
+    }
+
+    // // Delete expired tokens before checking active sessions
+    // $user->tokens()->delete();
+
+    // If the user is marked as "active" (previously logged in), check if this is a new login
+    if ($user->active == 1) {
+        // Block the user from logging in
         $user->update([
             'device_token' => null,
-            'active' => 0, // Mark as logged out
+            'active' => 2 // Set as blocked
+
+        ]);
+    $user->tokens()->delete();
+
+        return response()->json(['message' => 'You have been blocked for attempting to log in from another device. Contact admin.'], 403);
+    }
+
+    // Generate a new device token
+    $deviceToken = Str::random(32);
+
+    // Update user status and device token
+    $user->update([
+        'device_token' => $deviceToken,
+        'active' => 1, // Mark as active
+    ]);
+
+    // Generate new authentication token
+    $token = $user->createToken('auth_token')->plainTextToken;
+
+    return response()->json([
+        'token' => $token,
+        'user' => [
+            'id' => $user->id,
+            'email' => $user->email,
+            'role' => $user->role,
+        ],
+        'device_token' => $deviceToken,
+        'message' => 'Login successful.'
+    ], 200);
+}
+
+
+
+    public function logout(Request $request)
+{
+    $token = $request->bearerToken(); // Get the token from the request
+
+    if (!$token) {
+        return response()->json(['message' => 'No token provided'], 400);
+    }
+
+    // Find the token in the database
+    $personalAccessToken = \Laravel\Sanctum\PersonalAccessToken::findToken($token);
+
+    if ($personalAccessToken) {
+        // Get the associated user
+        $user = $personalAccessToken->tokenable;
+
+        // Revoke all tokens
+        $user->tokens()->delete();
+
+        // Clear device token and update status
+        $user->update([
+            'device_token' => null,
+            'active' => 0,
         ]);
 
         return response()->json(['message' => 'Logout successful']);
     }
-    public function forgotPassword(Request $request)
-    {
-        $rules = [
-            'email' => 'required|email',
-        ];
 
-        $validator = Validator::make($request->all(), $rules);
+    // If token is expired or invalid, still clear the session
+    $email = $request->input('email'); // Allow user to pass email if token is expired
+    $user = User::where('email', $email)->first();
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        $user = User::where('email', $request->email)->first();
-
-        if (!$user) {
-            return response()->json(['message' => 'User not found'], 404);
-        }
-
-        $otp = rand(1000, 9999);
-        $otpExpiresAt = Carbon::now()->addMinutes(10);
-
+    if ($user) {
         $user->update([
-            'remember_token' => $otp,
-            'otp_expires_at' => $otpExpiresAt,
+            'device_token' => null,
+            'active' => 0,
         ]);
-
-        Mail::to($user->email)->send(new OtpMail($otp, 'forget_password'));
-
-        return response()->json(['message' => 'OTP sent to your email'], 200);
     }
+
+    return response()->json(['message' => 'Session expired, user logged out'], 200);
+}
+
+
+public function forgotPassword(Request $request)
+{
+     $request->validate(['email' => 'required|email|exists:users,email']);
+
+    $user = User::where('email', $request->email)->first();
+
+    $token = Password::createToken($user);
+
+    $user->notify(new ResetPasswordNotification($token));
+
+    return response()->json(['message' => 'Password reset link sent to your email.'], 200);
+}
+
 
     public function resetPassword(Request $request)
     {
@@ -257,40 +267,62 @@ class AuthController extends Controller
 
         return response()->json(['message' => 'Password reset successful'], 200);
     }
+    public function getUser(Request $request)
+    {
 
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if ($user->role === 'student') {
+            $userDetails = $user->student;
+        } elseif ($user->role === 'instructor') {
+            $userDetails = $user->instructor;
+        } elseif ($user->role === 'admin') {
+            $userDetails = [
+                'name' => $user->admin->name,
+                'paypal_account' => $user->admin->paypal_account,
+            ];
+        } else {
+            $userDetails = null;
+        }
+
+        return response()->json([
+            'user' => [
+                'id' => $user->id,
+                'email' => $user->email,
+                'role' => $user->role,
+                'details' => $userDetails,
+            ]
+        ], 200);
+    }
 
     public function updatePassword(Request $request)
     {
-          // Validate the request with Validator facade
-          $validator = Validator::make($request->all(), [
-            'current_password' => 'required|string',
-            'new_password' => 'required|string|min:8',
-            'confirm_new_password' => 'required|string|same:new_password',
-        ]);
+            $request->validate([
+        'email' => 'required|email|exists:users,email',
+        'token' => 'required',
+        'password' => 'required|confirmed|min:8',
+    ]);
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+    $status = Password::reset(
+        $request->only('email', 'password', 'password_confirmation', 'token'),
+        function ($user, $password) {
+            $user->forceFill([
+                'password' => Hash::make($password),
+                'remember_token' => Str::random(60),
+            ])->save();
+
+            event(new PasswordReset($user));
         }
+    );
 
-        // Get the authenticated user
-        $user = Auth::user();
-
-        // dd($user->password);
-        if ($request->current_password== $request->new_password) {
-            return response()->json(['error' => 'Enter a new password '], 401);
-        }
-
-        // Check if the current password matches
-        if (!Hash::check($request->current_password, $user->password)) {
-            return response()->json(['error' => 'Current password is incorrect'], 401);
-        }
-
-        // Update the password
-        $user->update([
-            'password' => Hash::make($request->new_password)
-        ]);
-
-        return response()->json(['message' => 'Password updated successfully!'], 200);
+    if ($status === Password::PASSWORD_RESET) {
+        return response()->json(['message' => 'Password reset successful.'], 200);
     }
 
+    return response()->json(['message' => 'Invalid token or email.'], 400);
+
+}
 }
