@@ -1,145 +1,329 @@
 <?php
 
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\Admin\CategoryController;
-use App\Http\Controllers\Admin\InstructorController;
-use App\Http\Controllers\LandingPageController;
-use App\Http\Controllers\Admin\CourseController;
-use App\Http\Controllers\Admin\AdminController;
+namespace App\Http\Controllers;
+
+use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\SocialController;
-use App\Http\Controllers\PaymentController;
-use App\Http\Controllers\StudentAdminController;
-use App\Http\Controllers\Admin\CourseLecturesController;
-use App\Http\Controllers\Admin\StudentController;
-use Illuminate\Session\Middleware\StartSession;
-use App\Http\Controllers\Student\CourseController as StudentCourseController;
-use App\Http\Controllers\Admin\MeetingController;
-use App\Http\Controllers\PageController;
-use App\Http\Controllers\CartController;
-use App\Http\Controllers\StudentInterestController;
-use App\Http\Controllers\Student\MyCoursesController;
-use Illuminate\Session\Middleware\CheckUserActive;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Validator;
+use App\Mail\OtpMail;
+use Illuminate\Support\Facades\Mail;
+use Carbon\Carbon;
+use Illuminate\Support\Str;
+use Laravel\Sanctum\PersonalAccessToken;
 
-/*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register API routes for your application. These
-| routes are loaded by the RouteServiceProvider and all of them will
-| be assigned to the "api" middleware group. Make something great!
-|
-*/
+class AuthController extends Controller
+{
+    public function register(Request $request)
+    {
+        $rules = [
+            'email' => 'required|email|unique:users',
+            'password' => 'required|confirmed|min:8',
+            'role' => 'required|in:instructor,student',
+        ];
 
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login'])->name('login');
-Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
-Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
-Route::post('/reset-password', [AuthController::class, 'resetPassword']);
-Route::post('/update-password', [AuthController::class, 'updatePassword'])->middleware('auth:sanctum');
+        $validator = Validator::make($request->all(), $rules);
 
-// endpoints for landing page
-Route::get('/courses', [StudentCourseController::class, 'getCourses']);
-Route::get('/courses/{id}', [StudentCourseController::class, 'getCourse']);
-Route::get('/courses/{id}/related', [StudentCourseController::class, 'getRelatedCourses']);
-Route::get('/PopularCourses', [StudentCourseController::class, 'getPopularCourses']);
-
-Route::get('instructors', [LandingPageController::class, 'getInstructors']);
-Route::get('instructors/{id}', [LandingPageController::class, 'getInstructor']);
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
 
 
-Route::middleware([StartSession::class])->group(function () {
-    // Social Login Routes
-    Route::get('/auth/{provider}', [SocialController::class, 'redirectToProvider']);
-    Route::get('/auth/{provider}/callback', [SocialController::class, 'handleProviderCallback']);
-    Route::post('/complete-profile', [SocialController::class, 'completeProfile']);
-});
-
-// create routes group for admin
-Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
-    Route::prefix('admin')->group(function () {
-        Route::get('/profile', [AuthController::class, 'getUser']);
-        Route::apiResource('instructors', InstructorController::class)->except('update');
-        Route::Post('instructors/{id}', [InstructorController::class, 'update']);
-
-        Route::apiResource('admins', AdminController::class);
-
-        Route::apiResource('students', StudentController::class)->except('update');
-        Route::Post('students/{id}', [StudentController::class, 'update']);
-
-        Route::apiResource('courses', CourseController::class)->except('update');
-        Route::Post('courses/{id}', [CourseController::class, 'update']);
-        Route::apiResource('courses.lectures', CourseLecturesController::class)->except('update');
-        Route::Post('courses/{course}/lectures/{lecture}', [CourseLecturesController::class, 'update']);
-
-        Route::apiResource('categories', CategoryController::class);
-
-        Route::get('payments/export', [PaymentController::class, 'exportPaymentsReport']);
-        Route::get('purchase', [PaymentController::class, 'getPaymentsReport']);
-
-        Route::prefix('pages')->group(function () {
-            Route::get('{pageName}', [PageController::class, 'show']); // Get content for a page
-            Route::post('{pageName}', [PageController::class, 'update']); // Update content for a page
-            Route::post('/upload-image/{pageName}', [PageController::class, 'uploadImage']);
-            Route::post('/append-to-page/{pageName}', [PageController::class, 'appendToPage']);
-        });
+        $user = User::create([
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+            'role' => $request->role,
+        ]);
 
 
-        Route::get('/zoom/connect', [MeetingController::class, 'redirectToZoom']);
-        Route::get('/zoom/callback', [MeetingController::class, 'handleZoomCallback']);
-        Route::post('/meetings', [MeetingController::class, 'createMeeting']);
-    });
-});
+        if ($request->role === 'student') {
+            $request->validate([
+                'first_name' => 'required|string|max:255',
+                'last_name' => 'required|string|max:255',
+                'username' => 'required|string|max:255|unique:students,username',
+                'date_of_birth' => 'required|date',
+                'gender' => 'required|in:male,female',
+                'country' => 'required|string|max:255',
+                'phone' => 'required|string|max:255',
+                'education' => 'nullable|string|max:255',
+                'image' => 'nullable|string|max:255',
+                'interests' => 'nullable|string|max:255',
+            ]);
+
+            $user->student()->create([
+                'first_name' => $request->first_name,
+                'last_name' => $request->last_name,
+                'username' => $request->username,
+                'date_of_birth' => $request->date_of_birth,
+                'gender' => $request->gender,
+                'country' => $request->country,
+                'phone' => $request->phone,
+                'education' => $request->education,
+                'image' => $request->image,
+            ]);
+        } elseif ($request->role === 'instructor') {
+
+            $request->validate([
+                'name' => 'required|string|max:255',
+                'about' => 'nullable|string',
+                'gender' => 'required|in:male,female',
+                'date_of_birth' => 'required|date',
+                'phone' => 'required|string|max:255',
+                'paypal_account' => 'nullable|string|max:255',
+                'major' => 'required|in:university,school,graduated',
+                'image' => 'nullable|string|max:255',
+            ]);
+
+            $user->instructor()->create([
+                'name' => $request->name,
+                'about' => $request->about,
+                'gender' => $request->gender,
+                'date_of_birth' => $request->date_of_birth,
+                'phone' => $request->phone,
+                'paypal_account' => $request->paypal_account,
+                'major' => $request->major,
+                'image' => $request->image,
+            ]);
+        } elseif ($request->role === 'admin') {
+            $request->validate([
+                'name' => 'required|string|max:255',
+                'paypal_account' => 'nullable|string|max:255',
+            ]);
+
+            $user->admin()->create([
+                'name' => $request->name,
+                'paypal_account' => $request->paypal_account,
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Registration successful',
+            'user' => $user,
+        ], 201);
+    }
+
+    public function login(Request $request)
+    {
+        $rules = [
+            'email' => 'required|email',
+            'password' => 'required',
+        ];
+
+        $validator = Validator::make($request->all(), $rules);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        // Retrieve the user FIRST before checking authentication
+        $user = User::where('email', $request->email)->first();
+
+        // If user doesn't exist, return invalid credentials
+        if (!$user) {
+            return response()->json(['message' => 'Invalid credentials'], 401);
+        }
+
+        // If the specific user is blocked, prevent login
+        if ($user->active == 2) {
+            return response()->json(['message' => 'Your account is blocked. Contact admin.'], 403);
+        }
+
+        // Now, attempt authentication AFTER ensuring the user isn't blocked
+        if (!Auth::attempt($request->only('email', 'password'))) {
+            return response()->json(['message' => 'Invalid credentials'], 401);
+        }
 
 
-Route::middleware(['auth:sanctum', 'ensure.single.device', 'role:student', 'check.active'])->group(function () {
-    Route::prefix('student')->group(function () {
-        Route::get('/profile', [AuthController::class, 'getUser']);
-        //update student profile
-        Route::post('edit/{id}', [StudentController::class, 'update']);
-        //cart
-        Route::get('/cart', [CartController::class, 'index']);
-        Route::post('/cart/add', [CartController::class, 'addToCart']);
-        Route::delete('/cart/remove/{id}', [CartController::class, 'removeFromCart']);
-        Route::post('/cart/checkout', [CartController::class, 'checkout']);
+        // Refresh user data after login
+        $user = Auth::user();
 
-        Route::get('payment-history', [PaymentController::class, 'getPaymentHistory']); // student
+        if ($user->active == 1) {
+            // Force logout all active sessions
+            $user->tokens()->delete();
 
-        Route::prefix('/mycourses/{course}/lectures')->group(function () {
-            Route::get('/{lecture}', [MyCoursesController::class, 'getLectureDetails']);
-        });
+            // Block the user from logging in
+            $user->update([
+                'device_token' => null,
+                'active' => 2
+            ]);
 
-        Route::get('/mycourses', [StudentCourseController::class, 'myCourses']);
-        Route::get('/mycourses/{course}', [StudentCourseController::class, 'view']);
-        Route::get('/courses/{courseId}/feedback', [StudentCourseController::class, 'getCourseFeedback']);
-        Route::post('/courses/{courseId}/feedback', [StudentCourseController::class, 'submitCourseFeedback']);
+            return response()->json(['message' => 'You have been blocked for attempting to log in from another device. Contact admin.'], 403);
+        }
 
+        // Generate a new device token
+        $deviceToken = Str::random(32);
 
-        // interested routes
+        // Update user status and device token
+        $user->update([
+            'device_token' => $deviceToken,
+            'active' => 1, // Mark as active
+        ]);
 
-        Route::get('/interests/get', [StudentInterestController::class, 'index']);
-        Route::post('/interests/add', [StudentInterestController::class, 'store']);
-        Route::put('/interests/update/{id}', [StudentInterestController::class, 'update']);
-        Route::delete('/interests/delete/{id}', [StudentInterestController::class, 'destroy']);
-        Route::get('/interests/list', [StudentInterestController::class, 'showUserInterests']);
-    });
-});
+        // Generate new authentication token
+        $token = $user->createToken('auth_token')->plainTextToken;
 
-Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/paypal-payment', [PaymentController::class, 'paypalPayment']);
-});
-Route::get('/paypal-success', [PaymentController::class, 'paypalSuccess'])->name('paypal.success');
-Route::get('/paypal-cancel', [PaymentController::class, 'paypalCancel'])->name('paypal.cancel');
+        return response()->json([
+            'token' => $token,
+            'user' => [
+                'id' => $user->id,
+                'email' => $user->email,
+                'role' => $user->role,
+            ],
+            'device_token' => $deviceToken,
+            'message' => 'Login successful.'
+        ], 200);
+    }
 
-Route::get('payments/export', [PaymentController::class, 'exportPaymentsReport']);
-Route::get('purchase', [PaymentController::class, 'getPaymentsReport']);
-Route::post('payments/process', [PaymentController::class, 'processPayment']);
+    public function logout(Request $request)
+    {
+          $user = $request->user(); // Get authenticated user
+          if (!$user) {
+        return response()->json(['message' => 'Logout successful (or already logged out)'], 200);
+    }
+        // Revoke all user tokens
+        $user->tokens()->delete();
 
-Route::post('payments/prepare', [PaymentController::class, 'createPaymentMethod']);
+        // Clear the device token and set active status to 0
+        $user->update([
+            'device_token' => null,
+            'active' => 0, // Mark as logged out
+        ]);
 
-Route::middleware(['auth:sanctum', 'check.active'])->group(function () {
-    Route::get('/admin/blocked-users', [AdminController::class, 'getBlockedUsers']);
-    Route::post('/admin/unblock-user/{id}', [AdminController::class, 'unblockUser']);
-});
+        return response()->json(['message' => 'Logout successful']);
+    }
+    public function forgotPassword(Request $request)
+    {
+        $rules = [
+            'email' => 'required|email',
+        ];
+
+        $validator = Validator::make($request->all(), $rules);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
+
+        $otp = rand(1000, 9999);
+        $otpExpiresAt = Carbon::now()->addMinutes(10);
+
+        $user->update([
+            'remember_token' => $otp,
+            'otp_expires_at' => $otpExpiresAt,
+        ]);
+
+        Mail::to($user->email)->send(new OtpMail($otp, 'forget_password'));
+
+        return response()->json(['message' => 'OTP sent to your email'], 200);
+    }
+
+    public function resetPassword(Request $request)
+    {
+        $rules = [
+            'email' => 'required|email',
+            'otp' => 'required|numeric',
+            'password' => 'required|confirmed|min:8',
+        ];
+
+        $validator = Validator::make($request->all(), $rules);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
+
+        if ($user->remember_token !== $request->otp) {
+            return response()->json(['message' => 'Invalid OTP'], 400);
+        }
+
+        if (Carbon::now()->gt($user->otp_expires_at)) {
+            return response()->json(['message' => 'OTP has expired'], 400);
+        }
+
+        $user->password = Hash::make($request->password);
+        $user->save();
+
+        $user->update([
+            'remember_token' => null,
+            'otp_expires_at' => null,
+        ]);
+
+        return response()->json(['message' => 'Password reset successful'], 200);
+    }
+    public function getUser(Request $request)
+    {
+
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if ($user->role === 'student') {
+            $userDetails = $user->student;
+        } elseif ($user->role === 'instructor') {
+            $userDetails = $user->instructor;
+        } elseif ($user->role === 'admin') {
+            $userDetails = [
+                'name' => $user->admin->name,
+                'paypal_account' => $user->admin->paypal_account,
+            ];
+        } else {
+            $userDetails = null;
+        }
+
+        return response()->json([
+            'user' => [
+                'id' => $user->id,
+                'email' => $user->email,
+                'role' => $user->role,
+                'details' => $userDetails,
+            ]
+        ], 200);
+    }
+
+    public function updatePassword(Request $request)
+    {
+          // Validate the request with Validator facade
+          $validator = Validator::make($request->all(), [
+            'current_password' => 'required|string',
+            'new_password' => 'required|string|min:8',
+            'confirm_new_password' => 'required|string|same:new_password',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        // Get the authenticated user
+        $user = Auth::user();
+
+        // dd($user->password);
+        if ($request->current_password== $request->new_password) {
+            return response()->json(['error' => 'Enter a new password '], 401);
+        }
+
+        // Check if the current password matches
+        if (!Hash::check($request->current_password, $user->password)) {
+            return response()->json(['error' => 'Current password is incorrect'], 401);
+        }
+
+        // Update the password
+        $user->update([
+            'password' => Hash::make($request->new_password)
+        ]);
+
+        return response()->json(['message' => 'Password updated successfully!'], 200);
+    }
+
+}
