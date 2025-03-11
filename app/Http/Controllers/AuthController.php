@@ -178,8 +178,6 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $user = $request->user();
-
-        // Revoke all user tokens
         $user->tokens()->delete();
 
         // Clear the device token and set active status to 0
@@ -259,7 +257,7 @@ class AuthController extends Controller
 
         return response()->json(['message' => 'Password reset successful'], 200);
     }
- 
+
 
     public function updatePassword(Request $request)
     {
