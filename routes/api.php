@@ -33,6 +33,14 @@ use Illuminate\Session\Middleware\CheckUserActive;
 |
 */
 
+   // interested routes
+
+//    Route::get('/interests/get', [StudentInterestController::class, 'index']);
+//    Route::post('/interests/add', [StudentInterestController::class, 'store']);
+//    Route::put('/interests/update/{id}', [StudentInterestController::class, 'update']);
+//    Route::delete('/interests/delete/{id}', [StudentInterestController::class, 'destroy']);
+//    Route::get('/interests/list', [StudentInterestController::class, 'showUserInterests']);
+
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login'])->name('login');
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');

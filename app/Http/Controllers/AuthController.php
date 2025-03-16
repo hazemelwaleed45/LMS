@@ -50,7 +50,7 @@ class AuthController extends Controller
                 'phone' => 'required|string|max:255',
                 'education' => 'nullable|string|max:255',
                 'image' => 'nullable|string|max:255',
-                'interests' => 'nullable|string|max:255',
+                'interests' => 'nullable|string',
             ]);
 
             $user->student()->create([
@@ -63,6 +63,7 @@ class AuthController extends Controller
                 'phone' => $request->phone,
                 'education' => $request->education,
                 'image' => $request->image,
+                'interests' => $request->interests,
             ]);
         } elseif ($request->role === 'instructor') {
 

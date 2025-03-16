@@ -162,6 +162,7 @@ class StudentController extends Controller
             'education' => 'sometimes|string|max:255',
             'gender' => 'sometimes|string|in:male,female',
             'country' => 'sometimes|string|max:255',
+            'interests' => 'sometimes|string',
         ]);
 
         if ($validator->fails()) {
@@ -213,6 +214,7 @@ class StudentController extends Controller
             'education' => $request->education ?? $student->education,
             'gender' => $request->gender ?? $student->gender,
             'country' => $request->country ?? $student->country,
+            'interests' => $request->interests ?? $student->interests,
         ]);
 
         return response()->json(['data' => $student], 200);
