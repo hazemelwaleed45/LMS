@@ -74,6 +74,7 @@ class AuthController extends Controller
                 'phone' => $request->phone,
                 'education' => $request->education,
                 'image' => $imagePath,
+                'interests' => $request->interests,
             ]);
         } elseif ($request->role === 'instructor') {
             $validator = Validator::make($request->all(), [

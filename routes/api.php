@@ -18,6 +18,7 @@ use App\Http\Controllers\Student\CourseController as StudentCourseController;
 use App\Http\Controllers\Admin\MeetingController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\CartController;
+use App\Http\Controllers\Student\DashboardController;
 use App\Http\Controllers\StudentInterestController;
 use App\Http\Controllers\Student\MyCoursesController;
 use Illuminate\Session\Middleware\CheckUserActive;
@@ -32,6 +33,14 @@ use Illuminate\Session\Middleware\CheckUserActive;
 | be assigned to the "api" middleware group. Make something great!
 |
 */
+
+   // interested routes
+
+//    Route::get('/interests/get', [StudentInterestController::class, 'index']);
+//    Route::post('/interests/add', [StudentInterestController::class, 'store']);
+//    Route::put('/interests/update/{id}', [StudentInterestController::class, 'update']);
+//    Route::delete('/interests/delete/{id}', [StudentInterestController::class, 'destroy']);
+//    Route::get('/interests/list', [StudentInterestController::class, 'showUserInterests']);
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login'])->name('login');
@@ -96,6 +105,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 
 Route::middleware(['auth:sanctum', 'ensure.single.device', 'role:student', 'check.active'])->group(function () {
     Route::prefix('student')->group(function () {
+        Route::get('/dashboard', [DashboardController::class, 'dashboardStudent']);
         Route::get('/profile', [AuthController::class, 'getUser']);
         //update student profile
         Route::post('edit/{id}', [StudentController::class, 'update']);

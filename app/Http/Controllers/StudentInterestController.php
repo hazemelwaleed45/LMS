@@ -11,7 +11,7 @@ class StudentInterestController extends Controller
    
     public function index()
     {
-        $interests = StudentInterest::where('user_id', Auth::id())->get();
+        $interests = StudentInterest::where('user_id', Auth::id())->get(); 
         return response()->json($interests);
     }
 
