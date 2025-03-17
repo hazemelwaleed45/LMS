@@ -20,7 +20,6 @@ use App\Http\Controllers\PageController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\Student\DashboardController;
 use App\Http\Controllers\StudentInterestController;
-use App\Http\Controllers\Student\MyCoursesController;
 use Illuminate\Session\Middleware\CheckUserActive;
 
 /*
@@ -34,13 +33,6 @@ use Illuminate\Session\Middleware\CheckUserActive;
 |
 */
 
-   // interested routes
-
-//    Route::get('/interests/get', [StudentInterestController::class, 'index']);
-//    Route::post('/interests/add', [StudentInterestController::class, 'store']);
-//    Route::put('/interests/update/{id}', [StudentInterestController::class, 'update']);
-//    Route::delete('/interests/delete/{id}', [StudentInterestController::class, 'destroy']);
-//    Route::get('/interests/list', [StudentInterestController::class, 'showUserInterests']);
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login'])->name('login');
@@ -118,7 +110,7 @@ Route::middleware(['auth:sanctum', 'ensure.single.device', 'role:student', 'chec
         Route::get('payment-history', [PaymentController::class, 'getPaymentHistory']); // student
 
         Route::prefix('/mycourses/{course}/lectures')->group(function () {
-            Route::get('/{lecture}', [MyCoursesController::class, 'getLectureDetails']);
+            Route::get('/{lecture}', [StudentCourseController::class, 'getLectureDetails']);
         });
 
         Route::get('/mycourses', [StudentCourseController::class, 'myCourses']);
