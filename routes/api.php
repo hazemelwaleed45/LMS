@@ -113,11 +113,10 @@ Route::middleware(['auth:sanctum', 'ensure.single.device', 'role:student', 'chec
             Route::get('/{lecture}', [StudentCourseController::class, 'getLectureDetails']);
         });
 
-        Route::get('/mycourses', [StudentCourseController::class, 'myCourses']);
-        Route::get('/mycourses/{course}', [StudentCourseController::class, 'view']);
+        Route::get('/mycourses', [StudentCourseController::class, 'myCourses']); // get my courses
+        Route::get('/mycourses/{course}', [StudentCourseController::class, 'view']); // get course details
         Route::get('/courses/{courseId}/feedback', [StudentCourseController::class, 'getCourseFeedback']);
         Route::post('/courses/{courseId}/feedback', [StudentCourseController::class, 'submitCourseFeedback']);
-
 
         // interested routes
 

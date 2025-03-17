@@ -13,6 +13,8 @@ use App\Models\Instructor;
 use App\Models\Category;
 use App\Models\Lecture;
 use App\Models\User;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class CourseController extends Controller
@@ -51,29 +53,86 @@ class CourseController extends Controller
         return response()->json(new MyCoursesResource($course), 200);
     }
 
+    // public function getCourses(Request $request)
+    // {
+    //     $courseName = $request->input('courseName');
+    //     $categoryId = $request->input('categoryId');
+    //     $instructorName = $request->input('instructorName');
+
+    //     $query = Course::with(['category:id,name', 'instructor:id,name'])->select('id', 'title', 'image', 'category_id', 'instructor_id');
+
+    //     if ($courseName) {
+    //         $query = $query->where('title', 'LIKE', "%{$courseName}%");
+    //     }
+    //     if ($categoryId) {
+    //         $query = $query->where('category_id', $categoryId);
+    //     }
+    //     if ($instructorName) {
+    //         $query = $query->whereHas('instructor', function ($query) use ($instructorName) {
+    //             $query->where('name', 'LIKE', "%{$instructorName}%");
+    //         });
+    //     }
+
+    //     $courses = $query->get();
+
+    //     $data = $courses->map(function ($course) {
+    //         return [
+    //             'id' => $course->id,
+    //             'title' => $course->title,
+    //             'image' => $course->image
+    //                 ? Storage::disk('public')->url('images/courses/' . $course->image)
+    //                 : null,
+    //             'category_name' => $course->category ? $course->category->name : null,
+    //             'instructor_name' => $course->instructor ? $course->instructor->name : null,
+    //         ];
+    //     });
+
+    //     return response()->json(['data' => $data], 200);
+    // }
     public function getCourses(Request $request)
     {
+        $user = Auth::guard('sanctum')->user();
+        $student = $user ? $user->student : null; // If logged in, get the student profile
         $courseName = $request->input('courseName');
         $categoryId = $request->input('categoryId');
         $instructorName = $request->input('instructorName');
 
-        $query = Course::with(['category:id,name', 'instructor:id,name'])->select('id', 'title', 'image', 'category_id', 'instructor_id');
+        $query = Course::with(['category:id,name', 'instructor:id,name'])
+            ->select('id', 'title', 'image', 'category_id', 'instructor_id', 'start_date', 'end_date', 'duration');
 
         if ($courseName) {
-            $query = $query->where('title', 'LIKE', "%{$courseName}%");
+            $query->where('title', 'LIKE', "%{$courseName}%");
         }
         if ($categoryId) {
-            $query = $query->where('category_id', $categoryId);
+            $query->where('category_id', $categoryId);
         }
         if ($instructorName) {
-            $query = $query->whereHas('instructor', function ($query) use ($instructorName) {
+            $query->whereHas('instructor', function ($query) use ($instructorName) {
                 $query->where('name', 'LIKE', "%{$instructorName}%");
             });
         }
 
         $courses = $query->get();
 
-        $data = $courses->map(function ($course) {
+        $data = $courses->map(function ($course) use ($student) {
+            $canPurchase = true;
+            $subscriptionActive = false;
+
+            if ($student) {
+                // If the user is logged in, check enrollment
+                $enrollment = $student->enrollments()->where('course_id', $course->id)->first();
+                log::info('enrollment : ' . $enrollment);
+                if ($enrollment) {
+                    $enrollmentDate = $enrollment->created_at;
+                    $courseEndDate = $enrollmentDate->copy()->addDays($course->duration);
+
+                    if (now()->lessThan($courseEndDate)) {
+                        $subscriptionActive = true;
+                        $canPurchase = false;
+                    }
+                }
+            }
+
             return [
                 'id' => $course->id,
                 'title' => $course->title,
@@ -82,11 +141,14 @@ class CourseController extends Controller
                     : null,
                 'category_name' => $course->category ? $course->category->name : null,
                 'instructor_name' => $course->instructor ? $course->instructor->name : null,
+                'subscriptionActive' => $subscriptionActive, // If user is logged in, do they have access?
+                'canPurchase' => $canPurchase, // Can they buy it?
             ];
         });
 
         return response()->json(['data' => $data], 200);
     }
+
 
     public function getCourse($id)
     {
