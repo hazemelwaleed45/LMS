@@ -32,6 +32,7 @@ use Illuminate\Session\Middleware\CheckUserActive;
 | be assigned to the "api" middleware group. Make something great!
 |
 */
+Route::post('/contactus', [LandingPageController::class, 'sendContactMessage']);
 
 
 Route::post('/register', [AuthController::class, 'register']);
