@@ -110,8 +110,8 @@ Route::middleware(['auth:sanctum', 'ensure.single.device', 'role:student', 'chec
 
         Route::get('payment-history', [PaymentController::class, 'getPaymentHistory']); // student
 
-        Route::prefix('/mycourses/{course}/lectures')->group(function () {
-            Route::get('/{lecture}', [StudentCourseController::class, 'getLectureDetails']);
+        Route::prefix('/mycourses/{course_id}/lectures')->group(function () {
+            Route::get('/{lecture_id}', [StudentCourseController::class, 'getLectureDetails']);
         });
 
         Route::get('/mycourses', [StudentCourseController::class, 'myCourses']); // get my courses

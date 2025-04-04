@@ -53,42 +53,6 @@ class CourseController extends Controller
         return response()->json(new MyCoursesResource($course), 200);
     }
 
-    // public function getCourses(Request $request)
-    // {
-    //     $courseName = $request->input('courseName');
-    //     $categoryId = $request->input('categoryId');
-    //     $instructorName = $request->input('instructorName');
-
-    //     $query = Course::with(['category:id,name', 'instructor:id,name'])->select('id', 'title', 'image', 'category_id', 'instructor_id');
-
-    //     if ($courseName) {
-    //         $query = $query->where('title', 'LIKE', "%{$courseName}%");
-    //     }
-    //     if ($categoryId) {
-    //         $query = $query->where('category_id', $categoryId);
-    //     }
-    //     if ($instructorName) {
-    //         $query = $query->whereHas('instructor', function ($query) use ($instructorName) {
-    //             $query->where('name', 'LIKE', "%{$instructorName}%");
-    //         });
-    //     }
-
-    //     $courses = $query->get();
-
-    //     $data = $courses->map(function ($course) {
-    //         return [
-    //             'id' => $course->id,
-    //             'title' => $course->title,
-    //             'image' => $course->image
-    //                 ? Storage::disk('public')->url('images/courses/' . $course->image)
-    //                 : null,
-    //             'category_name' => $course->category ? $course->category->name : null,
-    //             'instructor_name' => $course->instructor ? $course->instructor->name : null,
-    //         ];
-    //     });
-
-    //     return response()->json(['data' => $data], 200);
-    // }
     public function getCourses(Request $request)
     {
         $user = Auth::guard('sanctum')->user();
@@ -136,9 +100,7 @@ class CourseController extends Controller
             return [
                 'id' => $course->id,
                 'title' => $course->title,
-                'image' => $course->image
-                    ? Storage::disk('public')->url('images/courses/' . $course->image)
-                    : null,
+                'image' => $course->image ? asset('storage/app/public/images/courses/' . $course->image) : null,
                 'category_name' => $course->category ? $course->category->name : null,
                 'instructor_name' => $course->instructor ? $course->instructor->name : null,
                 'subscriptionActive' => $subscriptionActive, // If user is logged in, do they have access?
@@ -152,13 +114,6 @@ class CourseController extends Controller
 
     public function getCourse($id)
     {
-        // cache the course
-        $cacheKey = "course_" . $id;
-        $cachedData = cache()->get($cacheKey);
-
-        if ($cachedData) {
-            return response()->json($cachedData, 200);
-        }
         // fetch the course from the database and cache the course
         $course = Course::with([
             'category:id,name',
@@ -179,9 +134,7 @@ class CourseController extends Controller
                 'student' => [
                     'id' => $review->student->id,
                     'name' => $review->student->first_name . ' ' . $review->student->last_name,
-                    'image' => $review->student->image
-                        ? Storage::disk('public')->url('images/students/' . $review->student->image)
-                        : null,
+                    'image' => $review->student->image ? asset('storage/app/public/images/students/' . $review->student->image) : null,
                 ],
                 'rate' => $review->rating,
                 'comment' => $review->comment,
@@ -193,9 +146,7 @@ class CourseController extends Controller
         $data =  [
             'id' => $course->id,
             'title' => $course->title,
-            'image' => $course->image
-                ? Storage::disk('public')->url('images/courses/' . $course->image)
-                : null,
+            'image' => $course->image ? asset('storage/app/public/images/courses/' . $course->image) : null,
             'description' => $course->description ?? null,
             'course_duration' => $course->duration . ' days',
             'course_price' => $course->price,
@@ -206,9 +157,7 @@ class CourseController extends Controller
                 'id' => $course->instructor->id,
                 'name' => $course->instructor->name,
                 'about' => $course->instructor->about,
-                'image' => $course->instructor->image
-                    ? Storage::disk('public')->url('images/instructors/' . $course->instructor->image)
-                    : null,
+                'image' => $course->instructor->image ? asset('storage/app/public/images/instructors/' . $course->instructor->image) : null,
             ] : null,
             'category' => $course->category ? [
                 'id' => $course->category->id,
@@ -224,7 +173,7 @@ class CourseController extends Controller
             'course_rating' => $courseRating,
             'students_feedbacks' => $studentsFeedbacks,
         ];
-        cache()->put($cacheKey, $data, now()->addMinutes(60));
+
         return response()->json(['data' => $data], 200);
     }
 
@@ -269,9 +218,7 @@ class CourseController extends Controller
         $reviews = $course->reviews->map(function ($review) {
             return [
                 'student_name' => $review->student->first_name . ' ' . $review->student->last_name,
-                'image' => $review->student->image
-                    ? Storage::disk('public')->url('images/students/' . $review->student->image)
-                    : null,
+                'image' => $review->student->image ? asset('storage/app/public/images/students/' . $review->student->image) : null,
                 'rating' => $review->rating,
                 'comment' => $review->comment,
                 'created_at' => $review->created_at->toDateTimeString(),
@@ -325,9 +272,7 @@ class CourseController extends Controller
             return [
                 'id' => $course->id,
                 'title' => $course->title,
-                'image' => $course->image
-                    ? Storage::disk('public')->url('images/courses/' . $course->image)
-                    : null,
+                'image' => $course->image ? asset('storage/app/public/images/courses/' . $course->image) : null,
                 'category_name' => $course->category ? $course->category->name : null,
                 'instructor_name' => $course->instructor ? $course->instructor->name : null,
             ];
@@ -337,33 +282,44 @@ class CourseController extends Controller
             'popular_courses' => $courses
         ], 200);
     }
-
-    public function getLectureDetails(Request $request, Lecture $lecture)
+    public function getLectureDetails(Request $request)
     {
+        $course_id  = $request->route('course_id');
+        $lecture_id = $request->route('lecture_id');
+
+        // Fetch the lecture and ensure it belongs to the given course
+        $lecture = Lecture::with(['course'])->where('id', $lecture_id)->where('course_id', $course_id)->first();
+
+
+        if (!$lecture) {
+            return response()->json(['error' => 'Lecture not found for this course'], 404);
+        }
+
         $user = $request->user();
-        $student = Student::where('user_id', $user->id)->first();
+        $student = Student::where('user_id', $user->id)->first(); // Fixed query
 
         if (!$student) {
             return response()->json(['error' => 'Student not found'], 404);
         }
-        if (!$student->courses->contains($lecture->course_id)) {
+
+        // Check if the student is enrolled in this course
+        if (!$student->courses->pluck('id')->contains($course_id)) {
             return response()->json(['error' => 'You are not enrolled in this course'], 403);
         }
 
-        $lecture->load(['attachments']);
-
         return response()->json([
-            'lecture_title' => $lecture->title,
-            'lecture_description' => $lecture->description,
-            'lecture_notes' => $lecture->notes,
-            'lecture_attachments' => $lecture->attachments->map(function ($attachment) {
-                return [
-                    'attachment_id' => $attachment->id,
-                    'name' => $attachment->name,
-                    'file_extension' => $attachment->file_extension,
-                    'size' => $attachment->size,
-                ];
-            }),
+            'data' => [
+                'id' => $lecture->id,
+                'title' => $lecture->title,
+                'description' => $lecture->description,
+                'duration' => $lecture->duration,
+                'video_path' => $lecture->video_path,
+                'attachments' => json_decode($lecture->lecture_attachments, true),
+                'course' => [
+                    'id' => $lecture->course->id,
+                    'name' => $lecture->course->title,
+                ],
+            ]
         ], 200);
     }
 }

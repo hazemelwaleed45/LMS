@@ -13,6 +13,7 @@ class Lecture extends Model
         'title',
         'description',
         'lecture_attachments',
+        'video_path',
         'duration',
         'course_id',
     ];
